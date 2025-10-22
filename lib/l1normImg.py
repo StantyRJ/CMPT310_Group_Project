@@ -14,3 +14,4 @@ def l1norm(image1, image2):
     # Sum it
     # return answer
     return np.sum(xor)
+    
