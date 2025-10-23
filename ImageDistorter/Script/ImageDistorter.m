@@ -1,12 +1,25 @@
-function ImageDistorter(varargin)
-    % ImageDistorter(img1, img2, ...)
-    % Applies transformations defined in default.csv to each input image.
+function ImageDistorter()
+    % ImageDistorter()
+    % Reads PNG images from ../Images/Input,
+    % applies transformations from default.csv,
+    % saves results to ../Images/Output.
 
-    if nargin < 1
-        error('Please provide at least one image base name (without .png).');
+    % paths
+    scriptDir = fileparts(mfilename('fullpath'));
+    inputDir  = fullfile(scriptDir, '..', 'Images', 'Input');
+    outputDir = fullfile(scriptDir, '..', 'Images', 'Output');
+    csvPath   = fullfile(scriptDir, 'default.csv');
+
+    if ~isfolder(inputDir)
+        error('Input directory not found: %s', inputDir);
     end
 
-    params = readmatrix("default.csv", 'Delimiter', ',');
+    if ~isfolder(outputDir)
+        mkdir(outputDir);
+    end
+
+    % Read transformation parameters
+    params = readmatrix(csvPath, 'Delimiter', ',');
     [numConfigs, numCols] = size(params);
     fprintf('Loaded %d parameter sets with %d columns.\n', numConfigs, numCols);
 
@@ -14,14 +27,17 @@ function ImageDistorter(varargin)
         error('CSV must have at least 8 columns: ScaleX, ScaleY, Angle, BlurSigma, NoiseVar, ContrastFactor, ShearX, ShearY');
     end
 
-    for i = 1:nargin
-        baseName = varargin{i};
-        filename = [baseName '.png'];
+    % Get all PNG files in input directory
+    imageFiles = dir(fullfile(inputDir, '*.png'));
+    if isempty(imageFiles)
+        error('No PNG images found in %s', inputDir);
+    end
 
-        if ~isfile(filename)
-            warning('File not found: %s', filename);
-            continue;
-        end
+    % Process images
+    for i = 1:numel(imageFiles)
+        filename = fullfile(inputDir, imageFiles(i).name);
+        [~, baseName, ~] = fileparts(filename);
+        fprintf('Processing %s...\n', imageFiles(i).name);
 
         img = imread(filename);
         [h, w, c] = size(img);
@@ -36,6 +52,7 @@ function ImageDistorter(varargin)
             shearX = params(row,7);
             shearY = params(row,8);
 
+            % Scale
             scaled = imresize(img, [round(h*scaley), round(w*scalex)]);
             scaledCanvas = uint8(ones(h, w, c) * 255);
             startRow = max(1, floor((h - size(scaled,1))/2) + 1);
@@ -46,32 +63,39 @@ function ImageDistorter(varargin)
             colsScaled = 1:(endCol-startCol+1);
             scaledCanvas(startRow:endRow, startCol:endCol, :) = scaled(rowsScaled, colsScaled, :);
 
+            % Rotate
             rotated = imrotate(scaledCanvas, angle, 'bilinear', 'crop');
             mask = all(rotated == 0, 3);
             rotated(repmat(mask, [1 1 c])) = 255;
 
+            % Blur
             if blurSigma > 0
                 blurred = imgaussfilt(rotated, blurSigma);
             else
                 blurred = rotated;
             end
 
+            % Noise
             if noiseVar > 0
                 noisy = imnoise(blurred, 'gaussian', 0, noiseVar);
             else
                 noisy = blurred;
             end
 
+            % Contrast
             imgDouble = im2double(noisy);
             contrastImg = imadjust(imgDouble, [], [], contrastF);
             contrastImg = im2uint8(contrastImg);
 
+            % Shear
             tform = affine2d([1 shearX 0; shearY 1 0; 0 0 1]);
             shearedImg = imwarp(contrastImg, tform, ...
                 'OutputView', imref2d(size(contrastImg)), 'FillValues', 255);
 
+            % Save Output
             outName = sprintf('%s_cfg%d.png', baseName, row);
-            imwrite(shearedImg, outName);
+            outPath = fullfile(outputDir, outName);
+            imwrite(shearedImg, outPath);
         end
     end
 
