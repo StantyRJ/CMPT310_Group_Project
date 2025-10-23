@@ -39,7 +39,22 @@ function ImageDistorter()
         [~, baseName, ~] = fileparts(filename);
         fprintf('Processing %s...\n', imageFiles(i).name);
 
-        img = imread(filename);
+        % --- FIX: Read alpha channel and blend transparency onto white ---
+        [img, ~, alpha] = imread(filename);
+        if ~isempty(alpha)
+            img = im2double(img);
+            alpha = im2double(alpha);
+
+            if size(img,3) == 1
+                img = repmat(img, 1, 1, 3);
+            end
+
+            whiteBg = ones(size(img));
+            img = img .* alpha + whiteBg .* (1 - alpha);
+            img = im2uint8(img);
+        end
+        % ----------------------------------------------------------------
+
         [h, w, c] = size(img);
 
         for row = 1:numConfigs
