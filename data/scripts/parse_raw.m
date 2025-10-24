@@ -16,7 +16,7 @@ function parse_raw(image_path, output_dir, n, characters)
     % Default values
     scriptDir = fileparts(mfilename('fullpath'));
     if nargin < 1 || isempty(image_path)
-        image_path  = fullfile(scriptDir, '..', 'dataset_raw_bg.png');
+        image_path  = fullfile(scriptDir, '..', 'dataset_raw.png');
     end
     if nargin < 2 || isempty(output_dir)
         output_dir = fullfile(scriptDir, '..', 'characters');
@@ -34,7 +34,7 @@ function parse_raw(image_path, output_dir, n, characters)
     end
 
     % Read input image
-    img = imread(image_path);
+    [img, ~, alpha] = imread(image_path);
     [imgHeight, imgWidth, ~] = size(img);
 
     % Determine number of rows and columns
@@ -49,18 +49,21 @@ function parse_raw(image_path, output_dir, n, characters)
     % Loop through rows and columns
     for row_index = 1:row_count
         for column_index = 1:column_count
-            % Extract the character image
             yStart = (row_index-1)*n + 1;
             yEnd   = row_index*n;
             xStart = (column_index-1)*n + 1;
             xEnd   = column_index*n;
-
+    
             file_name = sprintf('%d_%d.png', uint8(characters(column_index)), row_index);
             file_path = fullfile(output_dir, file_name);
-
-            imwrite(img(yStart:yEnd, xStart:xEnd, :), file_path);
-            if row_index == 1
-                imshow(img(yStart:yEnd, xStart:xEnd, :));
+    
+            % Extract RGB and alpha (if exists)
+            tileRGB = img(yStart:yEnd, xStart:xEnd, :);
+            if ~isempty(alpha)
+                tileAlpha = alpha(yStart:yEnd, xStart:xEnd);
+                imwrite(tileRGB, file_path, 'Alpha', tileAlpha);
+            else
+                imwrite(tileRGB, file_path);
             end
         end
     end
