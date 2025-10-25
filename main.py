@@ -14,7 +14,7 @@ def testKNN(image_dir):
             filepath = os.path.join(image_dir,filename) # get the real path
             try:
                 img = Image.open(filepath).convert("L") # Open it as img
-                data.append((img,label))
+                data.append((img,filename))
             except Exception as e:
                 print(f"Skipping {filename}: {e}")
 
@@ -24,5 +24,12 @@ def testKNN(image_dir):
     if len(data) > 1:
         print(KNN(data, 5))
 
+
+def testSVM(image_dir):
+    # Create X:
+    for filename in os.listdir(image_dir):
+        if filename.lower().endswith(".png"): # Check if png
+            label = filename[0]
+    pass
 
 testKNN(image_dir)
