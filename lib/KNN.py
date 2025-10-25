@@ -26,14 +26,14 @@ def KNN(data, K):
         return K
     correct = 0 
 
-    for i, (testImg, testFilename) in enumerate(data): # for each piece of data
+    for i, (testVec, testFilename) in enumerate(data): # for each piece of data
         distances = []
         testLabel = extract_label(testFilename)
-        for j, (trainImg, trainFilename) in enumerate(data): # Compare against other data
+        for j, (trainVec, trainFilename) in enumerate(data): # Compare against other data
             if i == j: # Except itself
                 continue
             trainLabel = extract_label(trainFilename)
-            dist = l1norm(testImg,trainImg) # Find the distance
+            dist = l1norm(testVec,trainVec) # Find the distance
             distances.append((dist,trainLabel)) # and append the distance with their respective letter
         distances.sort(key=lambda x: x[0]) # Sort it
         nearest = [label for _, label in distances[:K]]

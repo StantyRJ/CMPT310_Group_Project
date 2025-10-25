@@ -1,5 +1,5 @@
 import os
-from PIL import Image
+from PIL import Image, ImageFilter
 from lib.KNN import KNN
 from lib.SVM import *
 import numpy as np
@@ -15,8 +15,13 @@ def testKNN(image_dir):
             label = filename[0] # Label with first letter
             filepath = os.path.join(image_dir,filename) # get the real path
             try:
-                img = Image.open(filepath).convert("L") # Open it as img
-                data.append((img,filename))
+                img = Image.open(filepath).convert("L") # Open it as greyscale img
+                # denoise
+                denoised = img.filter(ImageFilter.MedianFilter(size=5))
+                # store in data array as a binary vector to make KNN distance calculations much faster
+                arrayed = np.array(denoised)
+                binarized = (arrayed > 128).astype(np.uint8).flatten()
+                data.append((binarized,filename))
             except Exception as e:
                 print(f"Skipping {filename}: {e}")
 
@@ -62,4 +67,5 @@ def testSVM(image_dir):
     accuracy = np.mean(predictions == y_labels)
     print(f"Training accuracy: {accuracy:.2f}")
 
-testSVM(image_dir)
+testKNN(image_dir)
+#testSVM(image_dir)
