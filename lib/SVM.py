@@ -58,7 +58,7 @@ def predict_svm(X, beta, b, w_pix=None):
 
 
 # Trains the model for all 62 characters
-def SVM_multiclass(X, y_labels, w_pix, C=1.0, lr=1e-3,epochs=100):
+def SVM_multiclass(X, y_labels, w_pix=None, C=1.0, lr=1e-3,epochs=100):
     """
     For all 62 characters (A-Z,a-z,0-9), run SVM
     Returns a dictionary of models: {class_label: (beta,b,w_pix)}
@@ -66,6 +66,9 @@ def SVM_multiclass(X, y_labels, w_pix, C=1.0, lr=1e-3,epochs=100):
 
     classes = sorted(list(set(y_labels)))
     models = {}
+
+    if w_pix is None:
+        w_pix = np.ones(X.shape[1])
 
     for cls in classes:
         print(f"Training SVM for class {cls}")

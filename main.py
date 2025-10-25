@@ -1,6 +1,8 @@
 import os
 from PIL import Image
 from lib.KNN import KNN
+from lib.SVM import *
+import numpy as np
 
 image_dir = os.path.join("data", "distorted")
 
@@ -24,12 +26,40 @@ def testKNN(image_dir):
     if len(data) > 1:
         print(KNN(data, 5))
 
+def extract_label(filename):
+    """
+    filename: name of the file
+    this function grabs numbers before first underscroll, returns the ascii output
+    """
+    base = os.path.basename(filename)
+    number = base.split('_')[0]
+    return chr(int(number))
 
 def testSVM(image_dir):
-    # Create X:
+    X = []
+    y_labels = []
+    # Create X and y_labels:
     for filename in os.listdir(image_dir):
         if filename.lower().endswith(".png"): # Check if png
-            label = filename[0]
-    pass
+            label = extract_label(filename)
+            filepath = os.path.join(image_dir,filename) # get the real path
+            try:
+                img = Image.open(filepath).convert("L").resize((64,64)) # Open it as img
+                arr = np.array(img)
+                binary = (arr > 128).astype(int)
+                X.append(binary.flatten())
+                y_labels.append(label)
+            except Exception as e:
+                print(f"Skipping {filename}: {e}")
+    X = np.array(X)
+    y_labels = np.array(y_labels)
+    # Train the model
+    models = SVM_multiclass(X, y_labels)
+    # Run predictions
+    predictions = predict_multiclass(X, models)
 
-testKNN(image_dir)
+    # Test predictions against actual labels
+    accuracy = np.mean(predictions == y_labels)
+    print(f"Training accuracy: {accuracy:.2f}")
+
+testSVM(image_dir)
