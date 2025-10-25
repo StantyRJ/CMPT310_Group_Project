@@ -1,6 +1,16 @@
 import numpy as np
 from PIL import Image
 from lib.l1normImg import l1norm
+import os
+
+def extract_label(filename):
+    """
+    filename: name of the file
+    this function grabs numbers before first underscroll, returns the ascii output
+    """
+    base = os.path.basename(filename)
+    number = base.split('_')[0]
+    return chr(int(number))
 
 def KNN(data, K):
     """
@@ -16,11 +26,13 @@ def KNN(data, K):
         return K
     correct = 0 
 
-    for i, (testImg, testLabel) in enumerate(data): # for each piece of data
+    for i, (testImg, testFilename) in enumerate(data): # for each piece of data
         distances = []
-        for j, (trainImg, trainLabel) in enumerate(data): # Compare against other data
+        testLabel = extract_label(testFilename)
+        for j, (trainImg, trainFilename) in enumerate(data): # Compare against other data
             if i == j: # Except itself
                 continue
+            trainLabel = extract_label(trainFilename)
             dist = l1norm(testImg,trainImg) # Find the distance
             distances.append((dist,trainLabel)) # and append the distance with their respective letter
         distances.sort(key=lambda x: x[0]) # Sort it

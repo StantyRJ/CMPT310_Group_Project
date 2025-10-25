@@ -2,7 +2,7 @@ import os
 from PIL import Image
 from lib.KNN import KNN
 
-image_dir = os.path.join("ImageDistorter", "Images", "Output")
+image_dir = os.path.join("data", "distorted")
 
 data = []
 
