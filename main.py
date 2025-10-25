@@ -59,7 +59,7 @@ def testSVM(image_dir):
     X = np.array(X)
     y_labels = np.array(y_labels)
     # Train the model
-    models = SVM_multiclass(X, y_labels)
+    models = SVM_multiclass(X, y_labels, lr=0.1)
     # Run predictions
     predictions = predict_multiclass(X, models)
 

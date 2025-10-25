@@ -38,7 +38,7 @@ def train_svm(X, y, w_pix=None, C=1.0, lr=1e-3, epochs=100):
                 beta -= lr * (beta)
             else:
                 beta -= lr * (beta - C * yi * xi)
-                b += lr * (C * yi)
+                b += lr * yi
     return beta, b, w_pix
 
 
