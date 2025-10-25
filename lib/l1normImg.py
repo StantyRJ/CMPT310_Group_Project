@@ -14,4 +14,8 @@ def l1norm(image1, image2):
     # Sum it
     # return answer
     return np.sum(xor)
+
+def l1normVec(vec1, vec2):
+    xor = np.bitwise_xor(vec1, vec2)
+    return np.sum(xor)
     

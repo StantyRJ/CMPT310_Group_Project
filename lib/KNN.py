@@ -1,6 +1,6 @@
 import numpy as np
 from PIL import Image
-from lib.l1normImg import l1norm
+from lib.l1normImg import l1norm, l1normVec
 import os
 
 def extract_label(filename):
@@ -33,7 +33,7 @@ def KNN(data, K):
             if i == j: # Except itself
                 continue
             trainLabel = extract_label(trainFilename)
-            dist = l1norm(testVec,trainVec) # Find the distance
+            dist = l1normVec(testVec,trainVec) # Find the distance
             distances.append((dist,trainLabel)) # and append the distance with their respective letter
         distances.sort(key=lambda x: x[0]) # Sort it
         nearest = [label for _, label in distances[:K]]

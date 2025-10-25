@@ -16,10 +16,8 @@ def testKNN(image_dir):
             filepath = os.path.join(image_dir,filename) # get the real path
             try:
                 img = Image.open(filepath).convert("L") # Open it as greyscale img
-                # denoise
-                denoised = img.filter(ImageFilter.MedianFilter(size=5))
-                # store in data array as a binary vector to make KNN distance calculations much faster
-                arrayed = np.array(denoised)
+                # store in data array as a binary vector
+                arrayed = np.array(img)
                 binarized = (arrayed > 128).astype(np.uint8).flatten()
                 data.append((binarized,filename))
             except Exception as e:
