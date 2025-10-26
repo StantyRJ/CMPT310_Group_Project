@@ -26,19 +26,19 @@ def extract_label(filename):
 def testKNN(image_dir):
     data = []
 
-    # Read all files in the folder
-    for filename in os.listdir(image_dir):
-        if filename.lower().endswith(".png"): # Check if it's png
-            label = filename[0] # Label with first letter
-            filepath = os.path.join(image_dir,filename) # get the real path
-            try:
-                img = Image.open(filepath).convert("L") # Open it as greyscale img
-                # store in data array as a binary vector
-                arrayed = np.array(img)
-                binarized = (arrayed > 128).astype(np.uint8).flatten()
-                data.append((binarized,filename))
-            except Exception as e:
-                print(f"Skipping {filename}: {e}")
+    # Read all png files in the folders
+    all_filepaths_filenames =   [(os.path.join(image_dir, filename),filename) for filename in os.listdir(image_dir) if filename.lower().endswith(".png")] \
+                              + [(os.path.join(other_dir, filename),filename) for filename in os.listdir(other_dir) if filename.lower().endswith(".png")]
+
+    for filepath,filename in all_filepaths_filenames:
+        try:
+            img = Image.open(filepath).convert("L") # Open it as greyscale img
+            # store in data array as a binary vector
+            arrayed = np.array(img)
+            binarized = (arrayed > 128).astype(np.uint8).flatten()
+            data.append((binarized,filename))
+        except Exception as e:
+            print(f"Skipping {filepath}: {e}")
 
     print(f"Loaded {len(data)} images") # Hopefully this > 0
 
@@ -166,6 +166,6 @@ def train_and_test_CNN(training_dir, test_dir, test_fraction=0.1):
     print(f"Holdout Accuracy: {accuracy:.2f}% ({correct}/{total})")
 
 
-train_and_test_CNN(training_dir=image_dir, test_dir=other_dir, test_fraction=0.1)
-#testKNN(image_dir)
+#train_and_test_CNN(training_dir=image_dir, test_dir=other_dir, test_fraction=0.1)
+testKNN(image_dir)
 #testSVM(image_dir)
