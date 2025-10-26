@@ -23,7 +23,7 @@ def extract_label(filename):
     number = base.split('_')[0]
     return chr(int(number))
 
-def testKNN(image_dir):
+def testKNN():
     data = []
 
     # Read all png files in the folders
@@ -32,7 +32,7 @@ def testKNN(image_dir):
 
     for filepath,filename in all_filepaths_filenames:
         try:
-            img = Image.open(filepath).convert("L") # Open it as greyscale img
+            img = Image.open(filepath).convert("L").resize((64,64)) # Open it as greyscale img
             # store in data array as a binary vector
             arrayed = np.array(img)
             binarized = (arrayed > 128).astype(np.uint8).flatten()
@@ -47,21 +47,23 @@ def testKNN(image_dir):
         print(KNN(data, 5))
 
 def testSVM(image_dir):
+
+    all_filepaths_filenames =   [(os.path.join(image_dir, filename),filename) for filename in os.listdir(image_dir) if filename.lower().endswith(".png")] \
+                              + [(os.path.join(other_dir, filename),filename) for filename in os.listdir(other_dir) if filename.lower().endswith(".png")]
+
     X = []
     y_labels = []
     # Create X and y_labels:
-    for filename in os.listdir(image_dir):
-        if filename.lower().endswith(".png"): # Check if png
-            label = extract_label(filename)
-            filepath = os.path.join(image_dir,filename) # get the real path
-            try:
-                img = Image.open(filepath).convert("L").resize((64,64)) # Open it as img
-                arr = np.array(img)
-                binary = (arr > 128).astype(int)
-                X.append(binary.flatten())
-                y_labels.append(label)
-            except Exception as e:
-                print(f"Skipping {filename}: {e}")
+    for filepath,filename in all_filepaths_filenames:
+        label = extract_label(filename)
+        try:
+            img = Image.open(filepath).convert("L").resize((64,64)) # Open it as greyscale img
+            arr = np.array(img)
+            binary = (arr > 128).astype(int).flatten()
+            X.append(binary)
+            y_labels.append(label)
+        except Exception as e:
+            print(f"Skipping {filename}: {e}")
     X = np.array(X)
     y_labels = np.array(y_labels)
     # Train the model
@@ -167,5 +169,5 @@ def train_and_test_CNN(training_dir, test_dir, test_fraction=0.1):
 
 
 #train_and_test_CNN(training_dir=image_dir, test_dir=other_dir, test_fraction=0.1)
-testKNN(image_dir)
-#testSVM(image_dir)
+#testKNN()
+testSVM(image_dir)
