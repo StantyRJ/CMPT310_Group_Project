@@ -7,6 +7,7 @@ import string
 import numpy as np
 
 from lib.KNN import KNN
+from lib.KNN import KNNOpt
 from lib.SVM import *
 from lib.CNN import *
 
@@ -41,7 +42,10 @@ def testKNN():
             print(f"Skipping {filepath}: {e}")
 
     print(f"Loaded {len(data)} images") # Hopefully this > 0
-
+    
+    if __name__=="__main__":
+        print(KNNOpt(data, 1, 1))
+    """
     # Run KNN
     if len(data) > 1:
         # After confirming data
@@ -60,6 +64,7 @@ def testKNN():
                 maxAccuracy = results[i]
                 bestK = i+1
         print(f"Best K is {K} with an accuracy of {maxAccuracy}")
+        """
 
 def testSVM(image_dir):
 
