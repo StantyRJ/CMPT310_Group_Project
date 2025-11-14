@@ -44,7 +44,22 @@ def testKNN():
 
     # Run KNN
     if len(data) > 1:
-        print(KNN(data, 5))
+        # After confirming data
+        # Test K's, 1 through 25
+        results = []
+        for K in range(1,26):
+            print(f"Running KNN for K = {K}")
+            results.append(KNN(data,K))
+            print(f"Training for K = {K} has finished")
+            print(f"K = {K}: Accuracy = {results[K-1]}")
+        maxAccuracy = 0
+        bestK = 0
+        # Iterate through results to return the best K and its accuracy
+        for i in range(1,25):
+            if results[i] > maxAccuracy:
+                maxAccuracy = results[i]
+                bestK = i+1
+        print(f"Best K is {K} with an accuracy of {maxAccuracy}")
 
 def testSVM(image_dir):
 
@@ -170,4 +185,4 @@ def train_and_test_CNN(training_dir, test_dir, test_fraction=0.1):
 
 #train_and_test_CNN(training_dir=image_dir, test_dir=other_dir, test_fraction=0.1)
 #testKNN()
-testSVM(image_dir)
+testKNN()
