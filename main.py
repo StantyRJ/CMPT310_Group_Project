@@ -168,26 +168,40 @@ def train_and_test_CNN(training_dir, test_dir, test_fraction=0.1):
     train_data, test_data = prepare_dataset(training_dir, test_dir, test_fraction)
 
     print(f"Training on {len(train_data)} images, testing on {len(test_data)} images")
-    model = CNN(train_data, epochs=50, batch_size=64)
+    model = CNN(train_data, epochs=100, batch_size=64)
     model.eval()
     device = next(model.parameters()).device
 
-    # Evaluate
     correct = 0
     total = 0
-    for tensor, label in test_data:
+    skipped = 0
+    
+    for tensor, original_label in test_data:
+        tensor = (tensor - model.norm_mean) / model.norm_std
         tensor = tensor.unsqueeze(0).to(device)
-        label = torch.tensor(label).to(device)
+        
+        if original_label in model.label_map:
+            mapped_label = model.label_map[original_label]
+        else:
+            skipped += 1
+            continue
+        
         with torch.no_grad():
             output = model(tensor)
             pred = output.argmax(1).item()
+        
         total += 1
-        if pred == label.item():
+        if pred == mapped_label:
             correct += 1
-    accuracy = 100 * correct / total
+    
+    accuracy = 100 * correct / total if total > 0 else 0
     print(f"Holdout Accuracy: {accuracy:.2f}% ({correct}/{total})")
+    if skipped > 0:
+        print(f"Skipped {skipped} samples with unseen labels")
+    
+    return model
 
 
-#train_and_test_CNN(training_dir=image_dir, test_dir=other_dir, test_fraction=0.1)
+train_and_test_CNN(training_dir=image_dir, test_dir=other_dir, test_fraction=0.1)
 #testKNN()
-testKNN()
+#testKNN()
