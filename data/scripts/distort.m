@@ -66,12 +66,12 @@ function distort()
             shearYRange = params(row,8);
 
             %Apply Rand Values
-            scalex = 1 + (2*rand()-1) * scaleXRange;
-            scaley = 1 + (2*rand()-1) * scaleYRange;
+            scalex = scaleXRange;
+            scaley = scaleYRange;
             angle  = (2*rand()-1) * angleRange;
             blurSigma = rand() * blurRange;
             noiseVar  = rand() * noiseRange;
-            contrastF = 1 + (2*rand()-1) * contrastRange;
+            contrastF = contrastRange;
             shearX = (2*rand()-1) * shearXRange;
             shearY = (2*rand()-1) * shearYRange;
             
