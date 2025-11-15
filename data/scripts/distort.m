@@ -1,10 +1,9 @@
 function distort()
     % distort()
     % Reads PNG images from ../characters/,
-    % applies transformations from ../distortions.csv,
+    % applies random transformations using CSV values as ranges (+/- percentage),
     % saves results to ../distorted.
 
-    % paths
     scriptDir = fileparts(mfilename('fullpath'));
     inputDir  = fullfile(scriptDir, '..', 'characters');
     outputDir = fullfile(scriptDir, '..', 'distorted');
@@ -18,7 +17,6 @@ function distort()
         mkdir(outputDir);
     end
 
-    % Read transformation parameters
     params = readmatrix(csvPath, 'Delimiter', ',');
     [numConfigs, numCols] = size(params);
     fprintf('Loaded %d parameter sets with %d columns.\n', numConfigs, numCols);
@@ -27,19 +25,19 @@ function distort()
         error('CSV must have at least 8 columns: ScaleX, ScaleY, Angle, BlurSigma, NoiseVar, ContrastFactor, ShearX, ShearY');
     end
 
-    % Get all PNG files in input directory
     imageFiles = dir(fullfile(inputDir, '*.png'));
     if isempty(imageFiles)
         error('No PNG images found in %s', inputDir);
     end
 
-    % Process images
+
+    randomRange = 0.05;
+
     for i = 1:numel(imageFiles)
         filename = fullfile(inputDir, imageFiles(i).name);
         [~, baseName, ~] = fileparts(filename);
         fprintf('Processing %s...\n', imageFiles(i).name);
 
-        % --- FIX: Read alpha channel and blend transparency onto white ---
         [img, ~, alpha] = imread(filename);
         if ~isempty(alpha)
             img = im2double(img);
@@ -53,19 +51,36 @@ function distort()
             img = img .* alpha + whiteBg .* (1 - alpha);
             img = im2uint8(img);
         end
-        % ----------------------------------------------------------------
 
         [h, w, c] = size(img);
 
         for row = 1:numConfigs
-            scalex = params(row,1);
-            scaley = params(row,2);
-            angle  = params(row,3);
-            blurSigma = params(row,4);
-            noiseVar  = params(row,5);
-            contrastF = params(row,6);
-            shearX = params(row,7);
-            shearY = params(row,8);
+            %get csv values
+            scaleXRange = params(row,1);
+            scaleYRange = params(row,2);
+            angleRange  = params(row,3);
+            blurRange = params(row,4);
+            noiseRange  = params(row,5);
+            contrastRange = params(row,6);
+            shearXRange = params(row,7);
+            shearYRange = params(row,8);
+
+            %Apply Rand Values
+            scalex = 1 + (2*rand()-1) * scaleXRange;
+            scaley = 1 + (2*rand()-1) * scaleYRange;
+            angle  = (2*rand()-1) * angleRange;
+            blurSigma = rand() * blurRange;
+            noiseVar  = rand() * noiseRange;
+            contrastF = 1 + (2*rand()-1) * contrastRange;
+            shearX = (2*rand()-1) * shearXRange;
+            shearY = (2*rand()-1) * shearYRange;
+            
+            % Ensure valid ranges
+            scalex = max(0.1, scalex);
+            scaley = max(0.1, scaley);
+            blurSigma = max(0, blurSigma);
+            noiseVar = max(0, noiseVar);
+            contrastF = max(0.1, contrastF);
 
             % Scale
             scaled = imresize(img, [round(h*scaley), round(w*scalex)]);
