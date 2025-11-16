@@ -133,7 +133,8 @@ def CNN(data, epochs=100, batch_size=64):
 def load_cnn_model():
     #
     # Load the saved model
-    if not os.path.exists("../CNN_model.pth") return ""
+    if not os.path.exists("../CNN_model.pth"):
+        return ""
     #
     device = "cuda" if torch.cuda.is_available() else "cpu"
     saved = torch.load("../CNN_model.pt", map_location=device)
