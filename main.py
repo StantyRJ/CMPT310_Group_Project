@@ -205,4 +205,4 @@ def train_and_test_CNN(training_dir, test_dir, test_fraction=0.1):
 
 #train_and_test_CNN(training_dir=image_dir, test_dir=other_dir, test_fraction=0.1)
 #testKNN()
-testKNN()
+train_and_test_CNN()

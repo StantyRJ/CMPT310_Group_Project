@@ -116,5 +116,35 @@ def CNN(data, epochs=100, batch_size=64):
     model.norm_mean = mean
     model.norm_std = std
     model.label_map = label_map
+
+    #
+    # Save the model se we dont have to train it again later
+    torch.save(
+        {
+            'modelState': model.state_dict(),
+            'mean': model.norm_mean,
+            'std': model.norm_std,
+            'labelMap': model.label_map
+        },
+        "../CNN_model.pth")
     
     return model
+
+def load_cnn_model():
+    #
+    # Load the saved model
+    if not os.path.exists("../CNN_model.pth") return ""
+    #
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    saved = torch.load("../CNN_model.pt", map_location=device)
+    #
+    model = SimpleCNN(num_classes=num_classes).to(device)
+    model.load_state_dict(saved["modelState"])
+    model.eval()    
+
+    model.norm_mean = saved["mean"]
+    model.norm_std  = saved["std"]
+    model.label_map = saved["labelMap"]
+
+    return model
+    
