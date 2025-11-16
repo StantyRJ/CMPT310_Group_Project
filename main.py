@@ -25,25 +25,26 @@ def extract_label(filename):
     return chr(int(number))
 
 def testKNN():
-    data = []
-
-    # Read all png files in the folders
-    all_filepaths_filenames =   [(os.path.join(image_dir, filename),filename) for filename in os.listdir(image_dir) if filename.lower().endswith(".png")] \
-                              + [(os.path.join(other_dir, filename),filename) for filename in os.listdir(other_dir) if filename.lower().endswith(".png")]
-
-    for filepath,filename in all_filepaths_filenames:
-        try:
-            img = Image.open(filepath).convert("L").resize((64,64)) # Open it as greyscale img
-            # store in data array as a binary vector
-            arrayed = np.array(img)
-            binarized = (arrayed > 128).astype(np.uint8).flatten()
-            data.append((binarized,filename))
-        except Exception as e:
-            print(f"Skipping {filepath}: {e}")
-
-    print(f"Loaded {len(data)} images") # Hopefully this > 0
-    
     if __name__=="__main__":
+        data = []
+
+        # Read all png files in the folders
+        all_filepaths_filenames =   [(os.path.join(image_dir, filename),filename) for filename in os.listdir(image_dir) if filename.lower().endswith(".png")] \
+                                + [(os.path.join(other_dir, filename),filename) for filename in os.listdir(other_dir) if filename.lower().endswith(".png")]
+
+        for filepath,filename in all_filepaths_filenames:
+            try:
+                img = Image.open(filepath).convert("L").resize((64,64)) # Open it as greyscale img
+                # store in data array as a binary vector
+                arrayed = np.array(img)
+                binarized = (arrayed > 128).astype(np.uint8).flatten()
+                data.append((binarized,filename))
+            except Exception as e:
+                print(f"Skipping {filepath}: {e}")
+
+        print(f"Loaded {len(data)} images") # Hopefully this > 0
+    
+    
         print(KNNOpt(data, 1, 1))
     """
     # Run KNN
