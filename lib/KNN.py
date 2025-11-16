@@ -90,6 +90,10 @@ def KNNOpt(data, Kstart, Kend, numJob=None):
     with mp.Pool(numJob) as pool:
         results = pool.map(findAccuracy, tasks)
 
+    result_dict = dict(results)
 
-    
-    return dict(results)
+    # --- Find best K and best accuracy ---
+    best_K = max(result_dict, key=result_dict.get)
+    best_acc = result_dict[best_K]
+
+    return result_dict, best_K, best_acc
