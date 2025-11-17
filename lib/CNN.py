@@ -35,7 +35,7 @@ class SimpleCNN(nn.Module):
 
 def CNN(data, epochs=100, batch_size=64):
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"CNN using device {device}")
+    tqdm.write(f"CNN using device=\"{device}\"")
     
     images = torch.stack([d[0] for d in data])
     labels = torch.tensor([d[1] for d in data], dtype=torch.long)
@@ -68,13 +68,13 @@ def CNN(data, epochs=100, batch_size=64):
     best_val_acc = 0.0
     best_model_state = None
     
-    for epoch in tqdm(range(epochs), desc="Epochs"):
+    for epoch in tqdm(range(epochs), desc="Epochs", leave=False):
         model.train()
         train_correct = 0
         train_total = 0
         
         # Batch loop with progress bar
-        for x_batch, y_batch in tqdm(train_loader, desc="Training Batches", leave=False):
+        for x_batch, y_batch in tqdm(train_loader, desc="train_loader", leave=False):
             x_batch, y_batch = x_batch.to(device), y_batch.to(device)
             
             optimizer.zero_grad()
@@ -109,7 +109,7 @@ def CNN(data, epochs=100, batch_size=64):
             best_model_state = model.state_dict().copy()
         
         if (epoch + 1) % 10 == 0:
-            print(f"Epoch {epoch+1}/{epochs} - Train: {train_acc:.2f}%, Val: {val_acc:.2f}%")
+            tqdm.write(f"Epoch {epoch+1}/{epochs} - Train: {train_acc:.2f}%, Val: {val_acc:.2f}%")
     
     if best_model_state is not None:
         model.load_state_dict(best_model_state)
