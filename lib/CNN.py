@@ -119,6 +119,8 @@ def CNN(data, epochs=100, batch_size=64):
     model.label_map = label_map
 
     # Save the model
+    scriptPath = os.path.dirname(os.path.abspath(__file__))
+    savePath = os.path.join(scriptPath, "..", "CNN_model.pth")
     torch.save(
         {
             'modelState': model.state_dict(),
@@ -126,7 +128,7 @@ def CNN(data, epochs=100, batch_size=64):
             'std': model.norm_std,
             'labelMap': model.label_map
         },
-        "../CNN_model.pth")
+        savePath)
     
     return model
 
