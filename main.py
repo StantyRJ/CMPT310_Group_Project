@@ -1,10 +1,15 @@
 import os
 from PIL import Image, ImageFilter
 from torchvision import transforms
+from torch.utils.data import TensorDataset, DataLoader, random_split
+import torch.nn.functional as F
 import torch
 import random
 import string
 import numpy as np
+
+# Note to users: EMNIST database: https://www.kaggle.com/datasets/crawford/emnist?resource=download please download the needed sets
+# download mnist as well yourself as the files are too big
 
 from lib.KNN import KNN
 from lib.KNN import KNNOpt
@@ -46,6 +51,46 @@ def testKNN():
     
     
         print(KNNOpt(data, 1, 25))
+
+def emnist_label(label):
+    """
+    Convert CSV label to string for KNN
+    """
+    return str(int(float(label)))  # safe conversion from '45.0' → '45'
+
+
+def load_emnist_for_knn(csv_path, max_samples=None):
+    """
+    Load EMNIST CSV file for KNN testing.
+
+    Returns:
+    - dataset: list of (vector, label) tuples, compatible with KNNOpt
+    """
+    data = np.loadtxt(csv_path, delimiter=",")
+    
+    if max_samples is not None:
+        data = data[:max_samples]
+
+    dataset = []
+    for row in data:
+        label = emnist_label(row[0])  # Keep labels as strings to match previous PNG labels
+        pixels = row[1:] / 255.0  # normalize to 0..1
+        dataset.append((pixels.astype(np.float32), label))
+    
+    print(f"Loaded {len(dataset)} samples from {csv_path}")
+    return dataset
+
+def mnistKNN():
+    if __name__ == "__main__":
+        train_data = load_emnist_for_knn("emnist-balanced-train.csv", max_samples=5000)
+        test_data = load_emnist_for_knn("emnist-balanced-test.csv", max_samples=1000)
+
+        # Combine into one dataset if KNNOpt expects all data together
+        all_data = train_data + test_data
+
+        # Run your KNN optimization
+        print(KNNOpt(all_data, 1, 25))
+
     """
     # Run KNN
     if len(data) > 1:
@@ -96,6 +141,43 @@ def testSVM(image_dir):
     accuracy = np.mean(predictions == y_labels)
     print(f"Training accuracy: {accuracy:.2f}")
 
+def emnistSVM(csv_path, max_samples=None, lr=0.1, binarize=True):
+    """
+    Train and test your custom SVM on EMNIST CSV.
+
+    Parameters:
+    - csv_path: path to EMNIST CSV file (label,pixel1,...,pixel784)
+    - max_samples: optional limit on number of samples to load
+    - lr: learning rate for SVM_multiclass
+    - binarize: if True, binarize pixels like old PNG pipeline
+    """
+    # Load CSV
+    data = np.loadtxt(csv_path, delimiter=",")
+    if max_samples is not None:
+        data = data[:max_samples]
+
+    # Prepare features
+    X = data[:, 1:] / 255.0
+    if binarize:
+        X = (X > 0.5).astype(int)
+
+    # Prepare labels as strings (avoid extract_label)
+    y_labels = np.array([str(int(label)) for label in data[:, 0]])
+
+    # Train one-vs-all SVM
+    models = SVM_multiclass(X, y_labels, lr=lr)
+
+    # Predict
+    predictions = predict_multiclass(X, models)
+
+    # Evaluate
+    accuracy = np.mean(predictions == y_labels)
+    print(f"EMNIST SVM accuracy: {accuracy:.2f}")
+
+    # Show sample predictions
+    print("\nSample predictions:")
+    for i in range(10):
+        print(f"Pred: {predictions[i]}  True: {y_labels[i]}")
 
 characters = string.ascii_uppercase + string.ascii_lowercase + string.digits  # 62 classes
 char_to_idx = {c: i for i, c in enumerate(characters)}
@@ -202,6 +284,85 @@ def train_and_test_CNN(training_dir, test_dir, test_fraction=0.1):
     
     return model
 
+def emnist_prepare_dataset(csv_path, test_fraction=0.1, max_samples=None, binarize=False):
+    """
+    Load EMNIST CSV and return train/test datasets for CNN.
+    Resizes 28x28 -> 64x64 to match existing CNN.
+    """
+    data = np.loadtxt(csv_path, delimiter=",")
+    
+    if max_samples is not None:
+        data = data[:max_samples]
+    
+    # Extract labels and pixels
+    y = data[:, 0].astype(int)
+    X = data[:, 1:] / 255.0      # normalize 0..1
+    
+    if binarize:
+        X = (X > 0.5).astype(np.float32)
+    
+    # Reshape to (N,1,28,28) for CNN
+    X = X.reshape(-1, 1, 28, 28)
+    X_tensor = torch.tensor(X, dtype=torch.float32)
+    
+    # Resize to 64x64 to match your CNN
+    X_tensor = F.interpolate(X_tensor, size=(64,64))
+    y_tensor = torch.tensor(y, dtype=torch.long)
+    
+    dataset = TensorDataset(X_tensor, y_tensor)
+    
+    # Split into train/test
+    n_test = max(1, int(len(dataset) * test_fraction))
+    n_train = len(dataset) - n_test
+    train_dataset, test_dataset = random_split(dataset, [n_train, n_test])
+    
+    return train_dataset, test_dataset
 
-train_and_test_CNN(training_dir=image_dir, test_dir=other_dir, test_fraction=0.1)
+
+def train_and_test_CNN_EMNIST(csv_path, test_fraction=0.1, epochs=20, batch_size=64, max_samples=None, binarize=False):
+    """
+    Train and test your CNN on EMNIST CSV dataset.
+    """
+    train_dataset, test_dataset = emnist_prepare_dataset(csv_path, test_fraction, max_samples, binarize)
+    
+    print(f"Training on {len(train_dataset)} samples, testing on {len(test_dataset)} samples")
+    
+    # Initialize CNN
+    model = CNN(train_dataset, epochs=epochs, batch_size=batch_size)
+    model.eval()
+    device = next(model.parameters()).device
+    
+    # Evaluate on holdout set
+    correct = 0
+    total = 0
+    
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    
+    with torch.no_grad():
+        for X_batch, y_batch in test_loader:
+            X_batch = (X_batch - model.norm_mean) / model.norm_std
+            X_batch = X_batch.to(device)
+            y_batch = y_batch.to(device)
+            
+            outputs = model(X_batch)
+            preds = outputs.argmax(1)
+            
+            correct += (preds == y_batch).sum().item()
+            total += y_batch.size(0)
+    
+    accuracy = 100 * correct / total if total > 0 else 0
+    print(f"EMNIST CNN Holdout Accuracy: {accuracy:.2f}% ({correct}/{total})")
+    
+    return model
+
+#train_and_test_CNN(training_dir=image_dir, test_dir=other_dir, test_fraction=0.1)
 #testKNN()
+#mnistKNN()
+#emnistSVM("emnist-balanced-train.csv", max_samples=10000, lr=0.1)
+cnn_model = train_and_test_CNN_EMNIST(
+    "emnist-balanced-train.csv",
+    test_fraction=0.1,
+    max_samples=10000,  # optional for faster testing
+    epochs=10,
+    batch_size=64
+)
