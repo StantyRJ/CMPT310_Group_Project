@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 import torch.optim as optim
-
+from tqdm import tqdm
 
 class SimpleCNN(nn.Module):
     def __init__(self, num_classes=62):
@@ -33,9 +33,9 @@ class SimpleCNN(nn.Module):
         x = self.dropout(x)
         return self.fc2(x)
 
-
 def CNN(data, epochs=100, batch_size=64):
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"CNN using device {device}")
     
     images = torch.stack([d[0] for d in data])
     labels = torch.tensor([d[1] for d in data], dtype=torch.long)
@@ -68,12 +68,13 @@ def CNN(data, epochs=100, batch_size=64):
     best_val_acc = 0.0
     best_model_state = None
     
-    for epoch in range(epochs):
+    for epoch in tqdm(range(epochs), desc="Epochs"):
         model.train()
         train_correct = 0
         train_total = 0
         
-        for x_batch, y_batch in train_loader:
+        # Batch loop with progress bar
+        for x_batch, y_batch in tqdm(train_loader, desc="Training Batches", leave=False):
             x_batch, y_batch = x_batch.to(device), y_batch.to(device)
             
             optimizer.zero_grad()
@@ -93,9 +94,9 @@ def CNN(data, epochs=100, batch_size=64):
         val_correct = 0
         val_total = 0
         
-        with torch.no_grad():
-            for x_batch, y_batch in val_loader:
-                x_batch, y_batch = x_batch.to(device), y_batch.to(device)
+        for x_batch, y_batch in tqdm(val_loader, desc="Validation Batches", leave=False):
+            x_batch, y_batch = x_batch.to(device), y_batch.to(device)
+            with torch.no_grad():
                 outputs = model(x_batch)
                 _, predicted = outputs.max(1)
                 val_total += y_batch.size(0)
@@ -117,8 +118,7 @@ def CNN(data, epochs=100, batch_size=64):
     model.norm_std = std
     model.label_map = label_map
 
-    #
-    # Save the model se we dont have to train it again later
+    # Save the model
     torch.save(
         {
             'modelState': model.state_dict(),
