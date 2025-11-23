@@ -7,6 +7,7 @@ import torch
 import random
 import string
 import numpy as np
+import matplotlib.pyplot as plot
 
 # Note to users: EMNIST database: https://www.kaggle.com/datasets/crawford/emnist?resource=download please download the needed sets
 # download mnist as well yourself as the files are too big
@@ -49,8 +50,17 @@ def testKNN():
 
         print(f"Loaded {len(data)} images") # Hopefully this > 0
     
-    
-        print(KNNOpt(data, 1, 25))
+        result_dict, best_K, best_acc = KNNOpt(data,1,25)
+
+        print(f"Best accuracy: {best_acc}")
+        #
+        # Graph the accuracy for the different K values
+        K_values = sorted(result_dict.keys())
+        plot.plot(K_values, [result_dict[k] for k in K_values], marker='x')
+        plot.xlabel("K")
+        plot.ylabel("Accuracy")
+        plot.title("KNN Accuracy For Different K")
+        plot.show()
 
 def emnist_label(label):
     """
@@ -356,13 +366,7 @@ def train_and_test_CNN_EMNIST(csv_path, test_fraction=0.1, epochs=20, batch_size
     return model
 
 #train_and_test_CNN(training_dir=image_dir, test_dir=other_dir, test_fraction=0.1)
-#testKNN()
+testKNN()
 #mnistKNN()
 #emnistSVM("emnist-balanced-train.csv", max_samples=10000, lr=0.1)
-cnn_model = train_and_test_CNN_EMNIST(
-    "emnist-balanced-train.csv",
-    test_fraction=0.1,
-    max_samples=10000,  # optional for faster testing
-    epochs=10,
-    batch_size=64
-)
+#cnn_model = train_and_test_CNN_EMNIST("emnist-balanced-train.csv",test_fraction=0.1,max_samples=10000,  epochs=10, batch_size=64)
