@@ -1,4 +1,5 @@
 import numpy as np
+from tqdm import tqdm
 
 def run_training(model, dataset_provider, eval_fn=None):
     """Generic pipeline: dataset and model are injected.
@@ -11,17 +12,17 @@ def run_training(model, dataset_provider, eval_fn=None):
     """
     X_train, y_train, X_test, y_test = dataset_provider.load()
 
-    print(f"Loaded dataset — train {len(X_train)} samples, test {len(X_test)} samples")
+    tqdm.write(f"Loaded dataset — train {len(X_train)} samples, test {len(X_test)} samples")
 
-    print("Fitting model...")
+    tqdm.write("Fitting model...")
     model.fit(X_train, y_train)
-    print("Predicting...")
+    tqdm.write("Predicting...")
     preds = model.predict(X_test)
 
     preds = np.asarray(preds)
     y_test = np.asarray(y_test)
     acc = float((preds == y_test).mean())
-    print(f"Accuracy: {acc:.4f}")
+    tqdm.write(f"Accuracy: {acc:.4f}")
 
     metrics = {"accuracy": acc}
     if eval_fn is not None:

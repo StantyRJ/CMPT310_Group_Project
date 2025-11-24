@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Sequence
 import numpy as np
+from tqdm import tqdm
 from .base import Classifier
 
 """
@@ -72,7 +73,7 @@ def SVM_multiclass(X, y_labels, w_pix=None, C=1.0, lr=1e-3,epochs=100):
         w_pix = np.ones(X.shape[1])
 
     for cls in classes:
-        print(f"Training SVM for class {cls}")
+        tqdm.write(f"Training SVM for class {cls}")
         y_binary = np.where(y_labels == cls, 1, -1)
         beta, b, w_used = train_svm(X, y_binary, w_pix=w_pix, C=C, lr=lr, epochs=epochs)
         models[cls] = (beta, b, w_used)

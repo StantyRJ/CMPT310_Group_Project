@@ -22,7 +22,7 @@ class CNNShape(nn.Module):
         input_shape: Tuple[int, int, int] = (1, 64, 64),
         num_classes: int = 62,
         conv_channels: List[int] = [64, 128, 256],
-        fc_units: Union[int, List[int]] = 1024,
+        fc_units: List[int] = [1024],
         dropout: float = 0.4,
     ):
         super().__init__()
@@ -45,10 +45,6 @@ class CNNShape(nn.Module):
 
         # Compute flattened size after conv/pool layers
         self._flattened_size = self._compute_flattened_size()
-
-        # Fully connected layers
-        if isinstance(fc_units, int):
-            fc_units = [fc_units]  # make it a list
 
         self.fcs = nn.ModuleList()
         in_features = self._flattened_size
@@ -227,7 +223,7 @@ class CNNShapeTester:
         Returns a dict mapping shape names to accuracy.
         """
         for shape in shapes:
-            print(f"\nTesting shape: {shape.name}")
+            tqdm.write(f"\nTesting shape: {shape.name}")
             model = CNNClassifier(
                 epochs=self.epochs,
                 batch_size=self.batch_size,
@@ -243,7 +239,7 @@ class CNNShapeTester:
             correct = sum(p == t for p, t in zip(holdout_preds, self.y_test))
             total = len(self.y_test)
             accuracy = 100.0 * correct / total if total > 0 else 0.0
-            print(f"Shape {shape.name} Holdout Accuracy: {accuracy:.2f}% ({correct}/{total})")
+            tqdm.write(f"Shape {shape.name} Holdout Accuracy: {accuracy:.2f}% ({correct}/{total})")
 
             self.results[shape.name] = accuracy
 

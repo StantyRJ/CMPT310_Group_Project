@@ -1,4 +1,6 @@
 import json
+
+from tqdm import tqdm
 from lib.models import KNNClassifier, SVMClassifier, CNNClassifier
 from lib.datasets.png_dataset import PNGDataset
 from lib.datasets.emnist_dataset import EMNISTCSVProvider
@@ -43,7 +45,7 @@ def run_png_cnn_shapes():
             name=d["name"],
             input_shape=tuple(d["input_shape"]),
             conv_channels=d["conv_channels"],
-            fc_units=d["fc_units"]  # can be a list now
+            fc_units=d["fc_units"]
         )
         shapes.append(shape)
     
@@ -54,11 +56,11 @@ def run_png_cnn_shapes():
     results = tester.test_shapes(shapes)
 
     # Print results
-    print("\n=== Shape Performance ===")
+    tqdm.write("\n=== Shape Performance ===")
     for shape_name, acc in results.items():
-        print(f"{shape_name}: {acc:.2f}%")
+        tqdm.write(f"{shape_name}: {acc:.2f}%")
 
-    print(f"\nBest shape: {tester.best_shape()} with accuracy {results[tester.best_shape()]:.2f}%")
+    tqdm.write(f"\nBest shape: {tester.best_shape()} with accuracy {results[tester.best_shape()]:.2f}%")
 
 def run_emnist_cnn():
     dataset = EMNISTCSVProvider("emnist-balanced-train.csv", test_fraction=0.1, max_samples=20000)

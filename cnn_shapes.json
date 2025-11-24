@@ -1,19 +1,19 @@
 [
     {
-        "name": "medium_wide_fc",
+        "name": "baseline",
         "input_shape": [
             1,
             64,
             64
         ],
         "conv_channels": [
-            32,
             64,
-            128
+            128,
+            256
         ],
         "fc_units": [
-            512,
-            256
+            1024,
+            64
         ]
     },
     {
@@ -71,60 +71,22 @@
         ]
     },
     {
-        "name": "extra_deep_fc",
+        "name": "super_wide_deep",
         "input_shape": [
             1,
             64,
             64
         ],
         "conv_channels": [
-            32,
             64,
             128,
             128,
             128
         ],
         "fc_units": [
-            512,
-            256,
-            128
-        ]
-    },
-    {
-        "name": "balanced_medium",
-        "input_shape": [
-            1,
-            64,
-            64
-        ],
-        "conv_channels": [
-            32,
-            64,
-            128,
-            128
-        ],
-        "fc_units": [
+            1024,
             512,
             256
-        ]
-    },
-    {
-        "name": "balanced_large",
-        "input_shape": [
-            1,
-            64,
-            64
-        ],
-        "conv_channels": [
-            64,
-            128,
-            128,
-            128
-        ],
-        "fc_units": [
-            512,
-            256,
-            128
         ]
     }
 ]
