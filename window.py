@@ -232,12 +232,15 @@ class PixelCanvas:
 
 
 # ---------------------------------------------------------------
-# Confidence Table
 class ConfidenceTable:
     def __init__(self, parent_frame):
 
-        parent_frame.rowconfigure(0, weight=1)
+        parent_frame.rowconfigure(1, weight=1)  # row 1 will be tree
         parent_frame.columnconfigure(0, weight=1)
+
+        # Add Predicted labels at top
+        self.pred_label = tk.Label(parent_frame, text="Predicted Val: CNN= , SVM= , KNN= ")
+        self.pred_label.grid(row=0, column=0, sticky="w", pady=(0,4))
 
         columns = ("class", "svm", "cnn", "knn")
 
@@ -246,12 +249,12 @@ class ConfidenceTable:
             columns=columns,
             show="headings"
         )
-        self.tree.grid(row=0, column=0, sticky="nsw")
+        self.tree.grid(row=1, column=0, sticky="nsw")
 
         # Scrollbar
         vsb = ttk.Scrollbar(parent_frame, orient="vertical",
                             command=self.tree.yview)
-        vsb.grid(row=0, column=1, sticky="ns")
+        vsb.grid(row=1, column=1, sticky="ns")
         self.tree.configure(yscrollcommand=vsb.set)
 
         # Column names
@@ -276,6 +279,7 @@ class ConfidenceTable:
         cnn = result_dict.get("cnn", [0]*62)
         knn = result_dict.get("knn", [0]*62)
 
+        # Update the table
         for i, row_id in enumerate(self.rows):
             self.tree.item(row_id, values=(
                 CLASSES[i],
@@ -284,6 +288,16 @@ class ConfidenceTable:
                 f"{knn[i]:.4f}",
             ))
 
+        # Update Predicted Val label
+        pred_cnn = CLASSES[np.argmax(cnn)] if len(cnn) > 0 else ""
+        pred_svm = CLASSES[np.argmax(svm)] if len(svm) > 0 else ""
+        pred_knn = CLASSES[np.argmax(knn)] if len(knn) > 0 else ""
+
+        self.pred_label.config(
+            text=f"Predicted Val: CNN={pred_cnn}, SVM={pred_svm}, KNN={pred_knn}"
+        )
+
+
 # ---------------------------------------------------------------
 # Main UI Layout
 # ---------------------------------------------------------------
@@ -291,14 +305,23 @@ if __name__ == "__main__":
     cnn = CNNClassifier(device="cpu")
     cnn.load("models/cnn_png_20251123_203830.pt")
     svm = SVMClassifier()
-    svm.load("models/svm_png_20251123_220516.pt")
+    svm.load("models/svm_png_20251124_085830.pt")
 
     # Prepare KNN trained on the PNG dataset (uses same pre-processing as in main.py)
     try:
         png_ds = PNGDataset("data/distorted", test_dir="data/characters", test_fraction=0.1)
         X_train, y_train, _, _ = png_ds.load()
-        knn = KNNClassifier(K=3)
-        knn.fit(X_train, y_train)
+
+        # Flatten and normalize to [-1,1] like CNN expects
+        X_train_flat = X_train.reshape(len(X_train), -1).astype(np.float32)
+        # PNGDataset might already give floats in [0,1]; if int, convert
+        if X_train_flat.max() > 1.0:
+            X_train_flat = X_train_flat / 127.5 - 1.0  # scale 0..255 -> -1..1
+        else:
+            X_train_flat = X_train_flat * 2.0 - 1.0   # scale 0..1 -> -1..1
+
+        knn = KNNClassifier(K=6)
+        knn.fit(X_train_flat, y_train)
         print(f"KNN trained on {len(X_train)} samples")
     except Exception as e:
         print("Failed to prepare KNN dataset:", e)
@@ -348,12 +371,14 @@ if __name__ == "__main__":
                     # KDTree expects flattened samples
                     sample = arr_norm.reshape(1, -1)
                     dist, idx = knn.tree.query(sample, k=knn.K)
-                    neighbor_labels = knn.y_train[idx[0]]
+                    neighbor_labels = knn.y_train[idx[0]]  # already 0..61
+
                     counts = np.bincount(neighbor_labels, minlength=len(CLASSES)).astype(float)
                     if counts.sum() > 0:
                         knn_probs62 = (counts / counts.sum()).tolist()
             except Exception as e:
                 print("KNN predict error:", e)
+
 
             # --- SVM: compute class scores and softmax to probabilities ---
             svm_probs62 = [0.0] * len(CLASSES)

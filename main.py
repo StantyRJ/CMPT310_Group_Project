@@ -84,13 +84,55 @@ def run_emnist_cnn():
     )
     run_training(model, dataset)
 
+def run_png_knn_sweep():
+    dataset = PNGDataset("data/distorted", test_dir="data/characters", test_fraction=0.1)
+
+    K_values = [1, 3, 5, 7, 9, 11, 15]
+    results = {}
+
+    for k in K_values:
+        tqdm.write(f"\nTesting K = {k}")
+        model = KNNClassifier(K=k)
+
+        output = run_training(model, dataset)
+
+        # Try the common keys for accuracy
+        if isinstance(output, dict):
+            if "accuracy" in output:
+                acc = output["accuracy"]
+            elif "test_accuracy" in output:
+                acc = output["test_accuracy"]
+            else:
+                raise ValueError(f"Could not find accuracy in output keys: {output.keys()}")
+        else:
+            acc = float(output)
+
+        results[k] = acc
+
+    best_k = max(results, key=results.get)
+    best_acc = results[best_k]
+
+    tqdm.write("\n=== KNN Sweep Results ===")
+    for k, acc in results.items():
+        tqdm.write(f"K={k}: {acc:.4f}")
+
+    tqdm.write(f"\n✅ Best K: {best_k} with accuracy {best_acc:.4f}")
+
+    best_model = KNNClassifier(K=best_k)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    run_training(best_model, dataset, save_file=f"models/knn_png_bestK{best_k}_{timestamp}.pt")
+
+
+
 # NOTE: EMNIST database: https://www.kaggle.com/datasets/crawford/emnist?resource=download
 # Please download the needed sets manually. MNIST files also need to be downloaded separately.
 
 if __name__ == "__main__":
     # Choose which example to run
-    run_png_svm()
-    # run_png_knn()
+    run_png_knn_sweep()
+    #run_png_svm()
+    #run_png_knn()
     # run_emnist_svm()
     # run_png_cnn()
     # run_png_cnn_shapes()
