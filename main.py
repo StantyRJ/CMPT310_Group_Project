@@ -1,3 +1,4 @@
+import json
 from lib.models import KNNClassifier, SVMClassifier, CNNClassifier
 from lib.datasets.png_dataset import PNGDataset
 from lib.datasets.emnist_dataset import EMNISTCSVProvider
@@ -31,71 +32,23 @@ def run_png_cnn_shapes():
     )
 
     # Define 10 different CNN shapes
-    shapes = [
-        CNNShape(
-            name="lightweight",
-            input_shape=(1, 64, 64),
-            conv_channels=[16, 32],
-            fc_units=64
-        ),
-        CNNShape(
-            name="medium_depth",
-            input_shape=(1, 64, 64),
-            conv_channels=[32, 64],
-            fc_units=128
-        ),
-        CNNShape(
-            name="deep_small_fc",
-            input_shape=(1, 64, 64),
-            conv_channels=[32, 64, 128],
-            fc_units=64
-        ),
-        CNNShape(
-            name="deep_medium_fc",
-            input_shape=(1, 64, 64),
-            conv_channels=[32, 64, 128],
-            fc_units=128
-        ),
-        CNNShape(
-            name="deep_large_fc",
-            input_shape=(1, 64, 64),
-            conv_channels=[32, 64, 128],
-            fc_units=256
-        ),
-        CNNShape(
-            name="wide_conv",
-            input_shape=(1, 64, 64),
-            conv_channels=[64, 128, 256],
-            fc_units=128
-        ),
-        CNNShape(
-            name="narrow_conv",
-            input_shape=(1, 64, 64),
-            conv_channels=[16, 32, 64],
-            fc_units=128
-        ),
-        CNNShape(
-            name="extra_deep",
-            input_shape=(1, 64, 64),
-            conv_channels=[16, 32, 64, 128],
-            fc_units=128
-        ),
-        CNNShape(
-            name="extra_wide",
-            input_shape=(1, 64, 64),
-            conv_channels=[64, 128, 256, 512],
-            fc_units=256
-        ),
-        CNNShape(
-            name="balanced",
-            input_shape=(1, 64, 64),
-            conv_channels=[32, 64, 128, 64],
-            fc_units=128
+    # Load JSON file
+    with open("cnn_shapes.json", "r") as f:
+        shapes_data = json.load(f)
+
+    # Reconstruct CNNShape objects
+    shapes = []
+    for d in shapes_data:
+        shape = CNNShape(
+            name=d["name"],
+            input_shape=tuple(d["input_shape"]),
+            conv_channels=d["conv_channels"],
+            fc_units=d["fc_units"]  # can be a list now
         )
-    ]
+        shapes.append(shape)
     
     # Initialize tester
-    tester = CNNShapeTester(dataset, epochs=10, batch_size=64)
+    tester = CNNShapeTester(dataset, epochs=200, batch_size=64)
 
     # Run tests
     results = tester.test_shapes(shapes)

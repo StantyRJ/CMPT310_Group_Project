@@ -8,41 +8,74 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset, random_split
 import torch.optim as optim
 from .base import Classifier
-from typing import Union, List, Dict, Optional
+from typing import Union, List, Dict, Optional, Tuple
 
 class CNNShape(nn.Module):
-    def __init__(self, name="CNN", input_shape=(1, 32, 32), num_classes=62,
-                 conv_channels=(64, 128, 256), fc_units=1024, dropout=0.4):
+    """
+    Defines a CNN architecture with configurable convolutional and fully connected layers.
+    Supports multiple FC layers.
+    """
+
+    def __init__(
+        self,
+        name: str = "CNN",
+        input_shape: Tuple[int, int, int] = (1, 64, 64),
+        num_classes: int = 62,
+        conv_channels: List[int] = [64, 128, 256],
+        fc_units: Union[int, List[int]] = 1024,
+        dropout: float = 0.4,
+    ):
         super().__init__()
         self.name = name
-        self.layers = nn.ModuleList()
+        self.input_shape = input_shape
+        self.conv_channels = conv_channels
+        self.dropout_prob = dropout
+
+        # Convolutional layers
+        self.convs = nn.ModuleList()
         self.bns = nn.ModuleList()
         in_ch = input_shape[0]
-        H, W = input_shape[1], input_shape[2]
-
-        # Build conv layers
         for ch in conv_channels:
-            self.layers.append(nn.Conv2d(in_ch, ch, kernel_size=3, padding=1))
+            self.convs.append(nn.Conv2d(in_ch, ch, kernel_size=3, padding=1))
             self.bns.append(nn.BatchNorm2d(ch))
             in_ch = ch
-            # MaxPool reduces spatial size by factor of 2
-            H = H // 2
-            W = W // 2
 
         self.pool = nn.MaxPool2d(2, 2)
         self.dropout = nn.Dropout(dropout)
 
-        flattened_size = conv_channels[-1] * H * W
-        self.fc1 = nn.Linear(flattened_size, fc_units)
-        self.fc2 = nn.Linear(fc_units, num_classes)
+        # Compute flattened size after conv/pool layers
+        self._flattened_size = self._compute_flattened_size()
+
+        # Fully connected layers
+        if isinstance(fc_units, int):
+            fc_units = [fc_units]  # make it a list
+
+        self.fcs = nn.ModuleList()
+        in_features = self._flattened_size
+        for units in fc_units:
+            self.fcs.append(nn.Linear(in_features, units))
+            in_features = units
+
+        # Final output layer
+        self.output_layer = nn.Linear(in_features, num_classes)
+
+    def _compute_flattened_size(self):
+        """Compute flattened size after conv + pool layers."""
+        with torch.no_grad():
+            dummy = torch.zeros(1, *self.input_shape)
+            for conv, bn in zip(self.convs, self.bns):
+                dummy = self.pool(F.relu(bn(conv(dummy))))
+            flattened_size = dummy.view(1, -1).size(1)
+        return flattened_size
 
     def forward(self, x):
-        for conv, bn in zip(self.layers, self.bns):
+        for conv, bn in zip(self.convs, self.bns):
             x = self.pool(F.relu(bn(conv(x))))
         x = x.view(x.size(0), -1)
-        x = F.relu(self.fc1(x))
-        x = self.dropout(x)
-        return self.fc2(x)
+        for fc in self.fcs:
+            x = F.relu(fc(x))
+            x = self.dropout(x)
+        return self.output_layer(x)
 
 class CNNClassifier(Classifier):
     """

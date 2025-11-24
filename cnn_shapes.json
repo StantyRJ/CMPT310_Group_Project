@@ -1,0 +1,130 @@
+[
+    {
+        "name": "medium_wide_fc",
+        "input_shape": [
+            1,
+            64,
+            64
+        ],
+        "conv_channels": [
+            32,
+            64,
+            128
+        ],
+        "fc_units": [
+            512,
+            256
+        ]
+    },
+    {
+        "name": "deep_balanced",
+        "input_shape": [
+            1,
+            64,
+            64
+        ],
+        "conv_channels": [
+            32,
+            64,
+            128,
+            128
+        ],
+        "fc_units": [
+            256,
+            128
+        ]
+    },
+    {
+        "name": "narrow_deep",
+        "input_shape": [
+            1,
+            64,
+            64
+        ],
+        "conv_channels": [
+            32,
+            64,
+            128,
+            128
+        ],
+        "fc_units": [
+            256,
+            128
+        ]
+    },
+    {
+        "name": "wide_deep",
+        "input_shape": [
+            1,
+            64,
+            64
+        ],
+        "conv_channels": [
+            64,
+            128,
+            128,
+            128
+        ],
+        "fc_units": [
+            512,
+            256
+        ]
+    },
+    {
+        "name": "extra_deep_fc",
+        "input_shape": [
+            1,
+            64,
+            64
+        ],
+        "conv_channels": [
+            32,
+            64,
+            128,
+            128,
+            128
+        ],
+        "fc_units": [
+            512,
+            256,
+            128
+        ]
+    },
+    {
+        "name": "balanced_medium",
+        "input_shape": [
+            1,
+            64,
+            64
+        ],
+        "conv_channels": [
+            32,
+            64,
+            128,
+            128
+        ],
+        "fc_units": [
+            512,
+            256
+        ]
+    },
+    {
+        "name": "balanced_large",
+        "input_shape": [
+            1,
+            64,
+            64
+        ],
+        "conv_channels": [
+            64,
+            128,
+            128,
+            128
+        ],
+        "fc_units": [
+            512,
+            256,
+            128
+        ]
+    }
+]
