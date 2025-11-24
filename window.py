@@ -315,12 +315,12 @@ if __name__ == "__main__":
         # Flatten and normalize to [-1,1] like CNN expects
         X_train_flat = X_train.reshape(len(X_train), -1).astype(np.float32)
         # PNGDataset might already give floats in [0,1]; if int, convert
-        if X_train_flat.max() > 1.0:
-            X_train_flat = X_train_flat / 127.5 - 1.0  # scale 0..255 -> -1..1
-        else:
-            X_train_flat = X_train_flat * 2.0 - 1.0   # scale 0..1 -> -1..1
+        #if X_train_flat.max() > 1.0:
+        #    X_train_flat = X_train_flat / 127.5 - 1.0  # scale 0..255 -> -1..1
+        #else:
+        #    X_train_flat = X_train_flat * 2.0 - 1.0   # scale 0..1 -> -1..1
 
-        knn = KNNClassifier(K=6)
+        knn = KNNClassifier(k=1)
         knn.fit(X_train_flat, y_train)
         print(f"KNN trained on {len(X_train)} samples")
     except Exception as e:
@@ -355,7 +355,8 @@ if __name__ == "__main__":
 
             # Convert drawing to same normalization as dataset: PNGDataset uses ToTensor()+Normalize((0.5,),(0.5,))
             # which maps image in [0,1] -> [-1,1]. get_image() returns [0,1] inverted (black=1).
-            arr_norm = arr * 2.0 - 1.0
+            arr01 = 1.0 - arr
+            arr_norm = arr01 * 2.0 - 1.0
 
             # --- CNN probabilities mapped into UI ordering (length 62) ---
             cnn_probs62 = [0.0] * len(CLASSES)
