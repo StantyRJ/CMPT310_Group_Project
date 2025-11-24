@@ -14,8 +14,8 @@ char_to_idx = {c: i for i, c in enumerate(characters)}
 train_transform = transforms.Compose([
     transforms.Grayscale(),
     transforms.Resize((64, 64)),
-    transforms.RandomRotation(10),
-    transforms.RandomAffine(0, translate=(0.1, 0.1)),
+    #transforms.RandomRotation(10),
+    #transforms.RandomAffine(0, translate=(0.1, 0.1)),
     transforms.ToTensor(),
     transforms.Normalize((0.5,), (0.5,))
 ])
