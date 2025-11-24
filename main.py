@@ -13,10 +13,19 @@ def run_png_knn():
     model = KNNClassifier(K=3)
     run_training(model, dataset)
 
+def run_png_svm():
+    dataset = PNGDataset("data/distorted", test_dir="data/characters", test_fraction=0.1)
+    model = SVMClassifier()
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_training(model, dataset, save_file=f"models/svm_png_{timestamp}.pt")
+
 def run_emnist_svm():
-    dataset = EMNISTCSVProvider("emnist-balanced-train.csv", test_fraction=0.1, max_samples=5000)
-    model = SVMClassifier(lr=0.1)
-    run_training(model, dataset)
+    dataset = EMNISTCSVProvider(csv_path="emnist-balanced-train.csv", test_fraction=0.1, max_samples=5000)
+    model = SVMClassifier()
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_training(model, dataset, save_file=f"models/svm_emnist_{timestamp}.pt")
 
 def run_png_cnn():
     dataset = PNGDataset("data/distorted", test_dir="data/characters", test_fraction=0.1)
@@ -80,8 +89,9 @@ def run_emnist_cnn():
 
 if __name__ == "__main__":
     # Choose which example to run
+    run_png_svm()
     # run_png_knn()
     # run_emnist_svm()
-    run_png_cnn()
+    # run_png_cnn()
     # run_png_cnn_shapes()
     # run_emnist_cnn()

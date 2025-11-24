@@ -46,7 +46,7 @@ from tkinter import ttk
 import random
 import numpy as np
 
-from lib.models import CNNClassifier, KNNClassifier
+from lib.models import CNNClassifier, KNNClassifier, SVMClassifier
 from lib.datasets.png_dataset import PNGDataset
 
 # ---------------------------------------------------------------
@@ -211,6 +211,25 @@ class PixelCanvas:
         # shape -> (1,1,H,W)
         return arr.reshape(1, 1, DISPLAY_H, DISPLAY_W)
 
+    # -------------------------------------------------------------
+    def clear(self):
+        """Clear the high-resolution canvas back to the erase color and update the view.
+
+        Notifies the optional on_change callback so the UI can recompute predictions.
+        """
+        for y in range(HR_H):
+            for x in range(HR_W):
+                self.hr_pixels[y][x] = ERASE_COLOR
+
+        self.update_display()
+
+        # notify listener that drawing changed
+        if hasattr(self, "on_change") and self.on_change is not None:
+            try:
+                self.on_change()
+            except Exception:
+                pass
+
 
 # ---------------------------------------------------------------
 # Confidence Table
@@ -271,6 +290,8 @@ class ConfidenceTable:
 if __name__ == "__main__":
     cnn = CNNClassifier(device="cpu")
     cnn.load("models/cnn_png_20251123_203830.pt")
+    svm = SVMClassifier()
+    svm.load("models/svm_png_20251123_220516.pt")
 
     # Prepare KNN trained on the PNG dataset (uses same pre-processing as in main.py)
     try:
@@ -314,31 +335,9 @@ if __name__ == "__main__":
             arr_norm = arr * 2.0 - 1.0
 
             # --- CNN probabilities mapped into UI ordering (length 62) ---
-            probs62 = [0.0] * len(CLASSES)
+            cnn_probs62 = [0.0] * len(CLASSES)
             try:
-                preds = cnn.predict_conf(arr_norm)
-                if isinstance(preds, np.ndarray):
-                    if preds.ndim == 2 and preds.shape[0] == 1:
-                        model_probs = preds[0].astype(float)
-                    else:
-                        model_probs = preds.flatten().astype(float)
-                else:
-                    model_probs = np.asarray(preds, dtype=float)
-
-                # Map model_probs (indices 0..model_C-1) into UI class order (0..61)
-                label_map = getattr(cnn, "label_map", None)
-                if label_map is None:
-                    # assume model index matches dataset label directly
-                    for i, p in enumerate(model_probs):
-                        if 0 <= i < len(probs62):
-                            probs62[i] = float(p)
-                else:
-                    # invert label_map: original_label -> model_idx, so invert to model_idx -> original_label
-                    inv = {v: k for k, v in label_map.items()}
-                    for model_idx, p in enumerate(model_probs.tolist()):
-                        orig_label = inv.get(model_idx)
-                        if orig_label is not None and 0 <= orig_label < len(probs62):
-                            probs62[int(orig_label)] = float(p)
+                cnn_probs62 = cnn.predict_conf(arr_norm)[0]
             except Exception as e:
                 print("CNN predict error:", e)
 
@@ -356,12 +355,99 @@ if __name__ == "__main__":
             except Exception as e:
                 print("KNN predict error:", e)
 
-            table.update_model_confidence({"cnn": probs62, "svm": [0.0] * len(CLASSES), "knn": knn_probs62})
+            # --- SVM: compute class scores and softmax to probabilities ---
+            svm_probs62 = [0.0] * len(CLASSES)
+            try:
+                svm_probs62 = svm.predict_conf(arr_norm)[0]
+            except Exception as e:
+                print("SVM predict error:", e)
+
+            table.update_model_confidence({"cnn": cnn_probs62, "svm": svm_probs62, "knn": knn_probs62})
         except Exception as e:
             # keep UI live even if prediction fails
             print("Prediction error:", e)
 
     canvas = PixelCanvas(left, on_change=schedule_predict)
+
+    # Controls under the canvas (clear button)
+    controls = tk.Frame(left)
+    controls.grid(row=1, column=0, pady=6, sticky="w")
+
+    clear_btn = tk.Button(controls, text="Clear", command=canvas.clear)
+    clear_btn.pack(side="left", padx=(0, 6))
+
+    # Load a random sample from the PNGDataset and paint it to the canvas
+    def _load_random_sample(event=None):
+        try:
+            # prefer training set if available
+            ds_X = None
+            try:
+                # X_train from earlier load
+                if 'X_train' in globals() and isinstance(X_train, (list, tuple, np.ndarray)):
+                    ds_X = X_train
+            except Exception:
+                ds_X = None
+
+            if ds_X is None:
+                # try to (re)load dataset
+                try:
+                    ds = PNGDataset("data/distorted", test_dir="data/characters", test_fraction=0.1)
+                    X_train_local, y_train_local, X_test_local, y_test_local = ds.load()
+                    ds_X = X_train_local
+                except Exception as e:
+                    print("Failed to load dataset for random sample:", e)
+                    return
+
+            # Ensure numpy array
+            ds_X = np.asarray(ds_X)
+            if ds_X.size == 0:
+                print("Dataset appears empty; cannot load random sample.")
+                return
+
+            idx = int(np.random.randint(0, ds_X.shape[0]))
+            sample = ds_X[idx]
+            # sample shape may be (C,H,W) or (1,H,W) or (H,W)
+            if sample.ndim == 3:
+                # (C,H,W) -> take first channel
+                img = sample[0]
+            elif sample.ndim == 2:
+                img = sample
+            else:
+                img = sample.reshape(sample.shape[-2], sample.shape[-1])
+
+            # img values are in [-1,1] (PNGDataset). Convert back to [0,1]
+            img01 = (img + 1.0) / 2.0
+
+            # Paint into high-res pixel grid
+            for dy in range(DISPLAY_H):
+                for dx in range(DISPLAY_W):
+                    v = float(img01[dy, dx])
+                    c = int(clamp(round(v * 255.0), 0, 255))
+                    col = (c, c, c)
+                    # fill HR block
+                    for j in range(HR_SCALE):
+                        for i in range(HR_SCALE):
+                            py = dy * HR_SCALE + j
+                            px = dx * HR_SCALE + i
+                            canvas.hr_pixels[py][px] = col
+
+            canvas.update_display()
+            # schedule prediction update
+            schedule_predict()
+        except Exception as e:
+            print("Error loading random sample:", e)
+
+    rand_btn = tk.Button(controls, text="Random", command=_load_random_sample)
+    rand_btn.pack(side="left", padx=(0, 6))
+
+    # bind 'c' key to clear the canvas
+    def _on_clear_key(event=None):
+        try:
+            canvas.clear()
+        except Exception:
+            pass
+
+    root.bind("c", _on_clear_key)
 
     # Right side: table
     right = tk.Frame(root)

@@ -1,114 +1,118 @@
 import numpy as np
-from typing import Sequence
-import numpy as np
+import joblib
+from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
+from typing import Sequence, Optional, Dict
+
 from tqdm import tqdm
 from .base import Classifier
 
-"""
-This program will perform SVM with SGD
-SVM(letter) in the form that SVM(A) generates a line to seperate A from not A
-Note: Please FLATTEN your images into a 1D array before entering (greyshift so only 1's and 0's)
-"""
-
-def train_svm(X, y, w_pix=None, C=1.0, lr=1e-3, epochs=100):
-    """
-    Train SVM using SGD
-    Please make sure that your X,y,and w_pix are numpy arrays, not normal arrays
-    X: (n_samples, n_features)
-    y: (n_samples,) labels in {-1,+1} (-1 is not letter, +1 is letter)
-    w_pix: weights for pixels (n_features,)
-    C: regularization parameter
-    lr: learning rate
-    epochs: number of passes
-    """
-    n_samples, n_features = X.shape
-    if w_pix is None:
-        w_pix = np.ones(n_features)
-    
-    Xw = X * w_pix # Pixel weighting
-
-    beta = np.zeros(n_features)
-    b = 0.0
-
-    for epoch in range(epochs): # epoch passes
-        for i in range(n_samples): # for each sample
-            xi, yi = Xw[i], y[i]
-            condition = yi * (np.dot(beta, xi) + b) >= 1
-
-            # Compute subgradient and update
-            if condition:
-                beta -= lr * (beta)
-            else:
-                beta -= lr * (beta - C * yi * xi)
-                b += lr * yi
-    return beta, b, w_pix
-
-
-# Uses the model to try and predict
-def predict_svm(X, beta, b, w_pix=None):
-    """
-    X: (n_samples, n_features)
-    y: (n_samples,) (holds label for each x in X)
-    beta: weight vector for each pixel
-    b: bias/intercept
-    """
-    if w_pix is None:
-        w_pix = np.ones(X.shape[1])
-    Xw = X * w_pix
-    scores = np.dot(Xw, beta) + b
-    return scores
-
-
-# Trains the model for all 62 characters
-def SVM_multiclass(X, y_labels, w_pix=None, C=1.0, lr=1e-3,epochs=100):
-    """
-    For all 62 characters (A-Z,a-z,0-9), run SVM
-    Returns a dictionary of models: {class_label: (beta,b,w_pix)}
-    """
-
-    classes = sorted(list(set(y_labels)))
-    models = {}
-
-    if w_pix is None:
-        w_pix = np.ones(X.shape[1])
-
-    for cls in classes:
-        tqdm.write(f"Training SVM for class {cls}")
-        y_binary = np.where(y_labels == cls, 1, -1)
-        beta, b, w_used = train_svm(X, y_binary, w_pix=w_pix, C=C, lr=lr, epochs=epochs)
-        models[cls] = (beta, b, w_used)
-    return models
-
-# Predicts for X using models from SVM_mutliclass
-def predict_multiclass(X, models):
-    """
-    X: (n_samples, n_features)
-    models: dictionary (see above)
-    Returns predicted labels
-    """
-
-    scores = []
-    for cls, (beta, b, w_pix) in models.items():
-        score = predict_svm(X,beta,b,w_pix)
-        scores.append(score)
-    scores = np.array(scores)
-    pred_indices = np.argmax(scores, axis=0)
-    return np.array(list(models.keys()))[pred_indices]
 
 class SVMClassifier(Classifier):
-    def __init__(self, lr: float = 0.1, num_iters: int = 1000):
-        self.lr = lr
-        self.num_iters = num_iters
-        self.models = None
+    """
+    SVM classifier with:
+    - consistent normalization (mean/std)
+    - label mapping identical to CNNClassifier
+    - predict_conf() returning correct class-ordered probabilities
+    """
 
-    def fit(self, X: Sequence, y: Sequence) -> None:
-        # Accepts numpy arrays or lists
-        X = np.asarray(X)
-        y = np.asarray(y)
-        self.models = SVM_multiclass(X, y, lr=self.lr)
+    def __init__(
+        self,
+        kernel: str = "rbf",
+        C: float = 2.0,
+        gamma: str = "scale",
+        probability: bool = True
+    ):
+        self.kernel = kernel
+        self.C = C
+        self.gamma = gamma
+        self.model: Optional[SVC] = None
 
-    def predict(self, X: Sequence) -> Sequence:
-        if self.models is None:
+        self.scaler: Optional[StandardScaler] = None
+        self.label_map: Optional[Dict[int, int]] = None
+
+    def fit(self, X: Sequence, y: Sequence):
+        X = np.asarray(X, dtype=np.float32)
+
+        # Flatten if image: (N, C, H, W) → (N, features)
+        if X.ndim > 2:
+            X = X.reshape(len(X), -1)
+
+        # Map labels to 0..num_classes-1
+        unique_labels = sorted(set(y))
+        self.label_map = {old: new for new, old in enumerate(unique_labels)}
+        mapped_y = np.array([self.label_map[val] for val in y], dtype=np.int32)
+
+        # Normalize like CNN
+        self.scaler = StandardScaler()
+        X_norm = self.scaler.fit_transform(X)
+
+        # Create SVM with probability support
+        self.model = SVC(
+            kernel=self.kernel,
+            C=self.C,
+            gamma=self.gamma,
+            probability=True
+        )
+
+        self.model.fit(X_norm, mapped_y)
+
+    def predict(self, X: Sequence):
+        if self.model is None:
             raise RuntimeError("Call fit() before predict().")
-        X = np.asarray(X)
-        return predict_multiclass(X, self.models)
+
+        X = np.asarray(X, dtype=np.float32)
+
+        if X.ndim > 2:
+            X = X.reshape(len(X), -1)
+
+        X_norm = self.scaler.transform(X)
+        pred_idx = self.model.predict(X_norm)
+
+        # Reverse map
+        reverse_map = {v: k for k, v in self.label_map.items()}
+        return np.array([reverse_map[i] for i in pred_idx])
+
+    def predict_conf(self, X: Sequence) -> np.ndarray:
+        """
+        Returns probability matrix (N, num_classes) in ORIGINAL label order.
+        Matches output of CNNClassifier.predict_conf().
+        """
+        if self.model is None:
+            raise RuntimeError("Call fit() before predict_conf().")
+
+        X = np.asarray(X, dtype=np.float32)
+
+        if X.ndim > 2:
+            X = X.reshape(len(X), -1)
+
+        X_norm = self.scaler.transform(X)
+
+        # Predict probs in mapped-label order
+        mapped_probs = self.model.predict_proba(X_norm)
+
+        # Reorder outputs to match ORIGINAL dataset label order
+        reverse_map = {new: old for old, new in self.label_map.items()}
+        ordered_labels = [reverse_map[i] for i in range(len(reverse_map))]
+
+        # mapped_probs[:, i] corresponds to label index i
+        # We just maintain the same ordering and return it
+        return mapped_probs
+
+    def save(self, path: str):
+        if self.model is None:
+            raise RuntimeError("No model to save.")
+
+        joblib.dump({
+            "model": self.model,
+            "scaler": self.scaler,
+            "label_map": self.label_map
+        }, path)
+
+    def load(self, path: str):
+        data = joblib.load(path)
+        self.model = data["model"]
+        self.scaler = data["scaler"]
+        self.label_map = data["label_map"]
+
+        tqdm.write(f"Model loaded from {path}")
