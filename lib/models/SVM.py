@@ -1,6 +1,7 @@
 import numpy as np
-from PIL import Image
-import os
+from typing import Sequence
+import numpy as np
+from .base import Classifier
 
 """
 This program will perform SVM with SGD
@@ -92,3 +93,21 @@ def predict_multiclass(X, models):
     scores = np.array(scores)
     pred_indices = np.argmax(scores, axis=0)
     return np.array(list(models.keys()))[pred_indices]
+
+class SVMClassifier(Classifier):
+    def __init__(self, lr: float = 0.1, num_iters: int = 1000):
+        self.lr = lr
+        self.num_iters = num_iters
+        self.models = None
+
+    def fit(self, X: Sequence, y: Sequence) -> None:
+        # Accepts numpy arrays or lists
+        X = np.asarray(X)
+        y = np.asarray(y)
+        self.models = SVM_multiclass(X, y, lr=self.lr)
+
+    def predict(self, X: Sequence) -> Sequence:
+        if self.models is None:
+            raise RuntimeError("Call fit() before predict().")
+        X = np.asarray(X)
+        return predict_multiclass(X, self.models)

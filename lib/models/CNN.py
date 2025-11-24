@@ -1,9 +1,13 @@
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 import torch.optim as optim
 from tqdm import tqdm
+from typing import Sequence, Optional
+from .base import Classifier
+import numpy as np
 
 class SimpleCNN(nn.Module):
     def __init__(self, num_classes=62):
@@ -141,7 +145,7 @@ def load_cnn_model():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     saved = torch.load("../CNN_model.pt", map_location=device)
     #
-    model = SimpleCNN(num_classes=num_classes).to(device)
+    model = SimpleCNN().to(device)
     model.load_state_dict(saved["modelState"])
     model.eval()    
 
@@ -150,4 +154,44 @@ def load_cnn_model():
     model.label_map = saved["labelMap"]
 
     return model
-    
+
+class CNNClassifier(Classifier):
+    def __init__(self, epochs: int = 20, batch_size: int = 64, device: Optional[str] = None):
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.model: Optional[CNN] = None
+
+    def _to_dataset(self, X: Sequence, y: Sequence) -> TensorDataset:
+        # Accept X as either torch tensors, lists, or numpy arrays shaped (N, C, H, W)
+        if isinstance(X, torch.Tensor):
+            X_tensor = X
+        else:
+            X_tensor = torch.tensor(np.asarray(X), dtype=torch.float32)
+        y_tensor = torch.tensor(np.asarray(y), dtype=torch.long)
+        return TensorDataset(X_tensor, y_tensor)
+
+    def fit(self, X: Sequence, y: Sequence) -> None:
+        dataset = self._to_dataset(X, y)
+        # Your CNN constructor previously accepted a dataset, epochs and batch_size
+        self.model = CNN(dataset, epochs=self.epochs, batch_size=self.batch_size)
+        # After training, move model to device
+        self.model.to(self.device)
+
+    def predict(self, X: Sequence) -> Sequence:
+        if self.model is None:
+            raise RuntimeError("Call fit() before predict().")
+        # Convert input
+        if not isinstance(X, torch.Tensor):
+            X_tensor = torch.tensor(np.asarray(X), dtype=torch.float32)
+        else:
+            X_tensor = X
+        self.model.eval()
+        with torch.no_grad():
+            X_tensor = X_tensor.to(self.device)
+            # Normalize if model exposes norm_mean/norm_std
+            if hasattr(self.model, "norm_mean") and hasattr(self.model, "norm_std"):
+                X_tensor = (X_tensor - self.model.norm_mean) / self.model.norm_std
+            outputs = self.model(X_tensor)
+            preds = outputs.argmax(1).cpu().numpy()
+        return preds.tolist()

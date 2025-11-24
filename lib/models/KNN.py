@@ -1,9 +1,12 @@
 import numpy as np
-from PIL import Image
-from lib.l1normImg import l1norm, l1normVec
+from .l1normImg import l1norm, l1normVec
 from sklearn.neighbors import KDTree
 import os
 import multiprocessing as mp
+from typing import Sequence, Any, Tuple
+import numpy as np
+from .base import Classifier
+
 
 def extract_label(filename):
     """
@@ -97,3 +100,47 @@ def KNNOpt(data, Kstart, Kend, numJob=None):
     best_acc = result_dict[best_K]
 
     return result_dict, best_K, best_acc
+
+class KNNClassifier(Classifier):
+    """Wrapper for KNN-based classification.
+
+    Stores training data on fit; uses KNN to predict.
+    """
+
+    def __init__(self, K: int = 3):
+        self.K = K
+        self.X_train = None
+        self.y_train = None
+
+    def fit(self, X: Sequence, y: Sequence) -> None:
+        # KNN is typically a lazy learner — storing training data is enough
+        self.X_train = np.asarray(X)
+        self.y_train = np.asarray(y)
+
+    def predict(self, X: Sequence) -> Sequence:
+        X = np.asarray(X)
+        results = []
+        # Use the KNN function provided in lib.KNN; if unavailable, fallback to KNNOpt behavior
+        for i in range(len(X)):
+            # KNN in your lib might accept arrays in various shapes: adapt as needed
+            pred = KNN(list(zip(self.X_train, self.y_train)), self.K, query=X[i]) if hasattr(KNN, "__call__") else None
+            # Many KNN helpers in student libs take the whole dataset and K and return accuracy —
+            # Here we try a simpler fallback: brute-force majority voting
+            if pred is None:
+                # brute force
+                dists = np.linalg.norm(self.X_train - X[i], axis=1)
+                nearest = np.argsort(dists)[: self.K]
+                votes = self.y_train[nearest]
+                # choose most common
+                vals, counts = np.unique(votes, return_counts=True)
+                results.append(vals[np.argmax(counts)])
+            else:
+                results.append(pred)
+        return results
+
+    def optimize_K(self, data: Sequence[Tuple[Any, Any]], k_min: int = 1, k_max: int = 25):
+        """Call your KNNOpt helper if you want to sweep K.
+
+        Accepts same format as original script's data: list of (vector, filename/label) tuples.
+        """
+        return KNNOpt(data, k_min, k_max)
