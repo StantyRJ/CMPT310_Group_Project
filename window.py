@@ -304,9 +304,9 @@ class ConfidenceTable:
 # ---------------------------------------------------------------
 if __name__ == "__main__":
     cnn = CNNClassifier(device="cpu")
-    cnn.load("models/cnn_png_20251124_131136.pt")
+    cnn.load("models/cnn_png_20251123_203830.pt")
     svm = SVMClassifier()
-    svm.load("models/svm_png_20251124_133117.pt")
+    svm.load("models/svm_png_20251123_234025.pt")
 
     # Prepare KNN trained on the PNG dataset (uses same pre-processing as in main.py)
     try:
