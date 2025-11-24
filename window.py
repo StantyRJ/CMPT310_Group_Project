@@ -305,7 +305,7 @@ if __name__ == "__main__":
     cnn = CNNClassifier(device="cpu")
     cnn.load("models/cnn_png_20251123_203830.pt")
     svm = SVMClassifier()
-    svm.load("models/svm_png_20251124_085830.pt")
+    svm.load("models/svm_png_20251124_111810.pt")
 
     # Prepare KNN trained on the PNG dataset (uses same pre-processing as in main.py)
     try:
@@ -320,7 +320,7 @@ if __name__ == "__main__":
         #else:
         #    X_train_flat = X_train_flat * 2.0 - 1.0   # scale 0..1 -> -1..1
 
-        knn = KNNClassifier(k=1)
+        knn = KNNClassifier(1)
         knn.fit(X_train_flat, y_train)
         print(f"KNN trained on {len(X_train)} samples")
     except Exception as e:
@@ -355,8 +355,7 @@ if __name__ == "__main__":
 
             # Convert drawing to same normalization as dataset: PNGDataset uses ToTensor()+Normalize((0.5,),(0.5,))
             # which maps image in [0,1] -> [-1,1]. get_image() returns [0,1] inverted (black=1).
-            arr01 = 1.0 - arr
-            arr_norm = arr01 * 2.0 - 1.0
+            arr_norm = (1.0 - arr) * 2.0 - 1.0
 
             # --- CNN probabilities mapped into UI ordering (length 62) ---
             cnn_probs62 = [0.0] * len(CLASSES)
