@@ -16,7 +16,7 @@ class KNNClassifier(Classifier):
         tree (KDTree): KDTree built on training data.
     """
 
-    def __init__(self, K: int = 3):
+    def __init__(self, K: int = 1):
         self.K = K
         self.X_train: np.ndarray | None = None
         self.y_train: np.ndarray | None = None
