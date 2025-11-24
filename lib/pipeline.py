@@ -1,7 +1,9 @@
+from typing import Optional
+import os
 import numpy as np
 from tqdm import tqdm
 
-def run_training(model, dataset_provider, eval_fn=None):
+def run_training(model, dataset_provider, eval_fn=None, save_file: Optional[str] = None):
     """Generic pipeline: dataset and model are injected.
 
     Train the model with the provided dataset, then determine it's accuracy.
@@ -23,6 +25,16 @@ def run_training(model, dataset_provider, eval_fn=None):
     y_test = np.asarray(y_test)
     acc = float((preds == y_test).mean())
     tqdm.write(f"Accuracy: {acc:.4f}")
+
+    if save_file:
+        try:
+            if hasattr(model, "save") and callable(getattr(model, "save")):
+                model.save(save_file)
+                tqdm.write(f"Model saved using model.save() -> {save_file}")
+            else:
+                tqdm.write(f"Model format is not saveable.")
+        except Exception as e:
+            tqdm.write(f"Failed to save model to {save_file}: {e}")
 
     metrics = {"accuracy": acc}
     if eval_fn is not None:

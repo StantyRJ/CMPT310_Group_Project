@@ -1,7 +1,52 @@
 #!/usr/bin/env python3
+import os
+import sys
+
+# Ensure Tcl/Tk runtime can be found when using virtual environments or unusual installs.
+# Try a few likely locations (sys.base_prefix, sys.prefix, and the common AppData path).
+def _ensure_tcl_tk_env():
+    # common candidate directories for init.tcl on Windows
+    candidates = []
+    try:
+        candidates.append(os.path.join(sys.base_prefix, "tcl", "tcl8.6"))
+    except Exception:
+        pass
+    try:
+        candidates.append(os.path.join(sys.prefix, "tcl", "tcl8.6"))
+    except Exception:
+        pass
+    try:
+        candidates.append(os.path.join(sys.exec_prefix, "tcl", "tcl8.6"))
+    except Exception:
+        pass
+    # user local AppData Python install (common on Windows installers)
+    user_appdata = os.path.join(os.environ.get("USERPROFILE", ""), "AppData", "Local", "Programs", "Python")
+    if os.path.isdir(user_appdata):
+        # search for any Python*/tcl/tcl8.6 folders under that tree
+        for entry in os.listdir(user_appdata):
+            candidate = os.path.join(user_appdata, entry, "tcl", "tcl8.6")
+            candidates.append(candidate)
+
+    for c in candidates:
+        if c and os.path.isdir(c) and os.path.isfile(os.path.join(c, "init.tcl")):
+            os.environ.setdefault("TCL_LIBRARY", c)
+            # guess tk path by replacing tcl8.6 with tk8.6 when possible
+            tk_candidate = c.replace("tcl8.6", "tk8.6")
+            if os.path.isdir(tk_candidate):
+                os.environ.setdefault("TK_LIBRARY", tk_candidate)
+            return True
+    return False
+
+
+# Try to set the environment variables before importing tkinter to avoid TclError
+_ensure_tcl_tk_env()
+
 import tkinter as tk
 from tkinter import ttk
 import random
+import numpy as np
+
+from lib.models import CNNClassifier
 
 # ---------------------------------------------------------------
 # Grid sizes
@@ -31,7 +76,7 @@ def clamp(x, lo, hi):
 # ---------------------------------------------------------------
 # Pixel Canvas
 class PixelCanvas:
-    def __init__(self, parent_frame):
+    def __init__(self, parent_frame, on_change=None):
 
         # ---- High-resolution drawing grid ----
         self.hr_pixels = [
@@ -62,6 +107,10 @@ class PixelCanvas:
         self.canvas.bind("<B3-Motion>", self.on_erase)
 
         self.update_display()
+
+        # optional callback called whenever the visible canvas changes
+        # (the UI can debounce calls if needed)
+        self.on_change = on_change
 
     # -------------------------------------------------------------
     def _create_rects(self):
@@ -99,6 +148,12 @@ class PixelCanvas:
                         self.hr_pixels[y][x] = color
 
         self.update_display()
+        # notify listener that drawing changed
+        if hasattr(self, "on_change") and self.on_change is not None:
+            try:
+                self.on_change()
+            except Exception:
+                pass
 
     # -------------------------------------------------------------
     def update_display(self):
@@ -129,6 +184,31 @@ class PixelCanvas:
     def on_erase(self, event):
         hx, hy = self.event_to_hr(event)
         self.paint_hr_area(hx, hy, ERASE_COLOR)
+
+    def get_image(self):
+        """Return the current drawing as a numpy array shaped (1,1,64,64) of floats [0..1].
+
+        The canvas stores higher-resolution RGB pixels in self.hr_pixels; we average
+        the HR block for each display pixel and convert to grayscale.
+        """
+        arr = np.zeros((DISPLAY_H, DISPLAY_W), dtype=np.float32)
+        for dy in range(DISPLAY_H):
+            for dx in range(DISPLAY_W):
+                r = g = b = 0.0
+                for j in range(HR_SCALE):
+                    for i in range(HR_SCALE):
+                        px = dx * HR_SCALE + i
+                        py = dy * HR_SCALE + j
+                        cr, cg, cb = self.hr_pixels[py][px]
+                        r += cr; g += cg; b += cb
+                # average and convert to 0..1 where 0 is black, 1 is white
+                n = HR_SCALE * HR_SCALE
+                avg = (r + g + b) / (3.0 * n * 255.0)
+                # invert so that black strokes become 1.0 (as many models expect white background)
+                arr[dy, dx] = 1.0 - avg
+
+        # shape -> (1,1,H,W)
+        return arr.reshape(1, 1, DISPLAY_H, DISPLAY_W)
 
 
 # ---------------------------------------------------------------
@@ -189,6 +269,9 @@ class ConfidenceTable:
 # Main UI Layout
 # ---------------------------------------------------------------
 if __name__ == "__main__":
+    cnn = CNNClassifier(device="cpu")
+    cnn.load("models/cnn_png_20251123_203830.pt")
+
     root = tk.Tk()
     root.title("Model Playground")
 
@@ -196,13 +279,54 @@ if __name__ == "__main__":
     left = tk.Frame(root)
     left.pack(side="left", padx=10, pady=10)
 
-    canvas = PixelCanvas(left)
+    # Debounce scheduling container
+    poll_after = {"id": None}
+    POLL_DELAY = 300  # ms
+
+    def schedule_predict():
+        # cancel previous scheduled call and schedule a new one
+        if poll_after["id"] is not None:
+            try:
+                root.after_cancel(poll_after["id"])
+            except Exception:
+                pass
+            poll_after["id"] = None
+        poll_after["id"] = root.after(POLL_DELAY, do_predict)
+
+    def do_predict():
+        poll_after["id"] = None
+        try:
+            arr = canvas.get_image()
+            preds = cnn.predict_conf(arr)
+
+            # preds may be a (1, C) numpy array from predict_conf; convert to flat list of floats
+            if isinstance(preds, np.ndarray):
+                if preds.ndim == 2 and preds.shape[0] == 1:
+                    probs = preds[0].astype(float).tolist()
+                else:
+                    probs = preds.flatten().astype(float).tolist()
+            else:
+                # fallback: try to coerce to list of floats
+                probs = [float(x) for x in preds]
+
+            table.update_model_confidence({"cnn": probs, "svm": [0.0] * len(CLASSES), "knn": [0.0] * len(CLASSES)})
+        except Exception as e:
+            # keep UI live even if prediction fails
+            print("Prediction error:", e)
+
+    canvas = PixelCanvas(left, on_change=schedule_predict)
 
     # Right side: table
     right = tk.Frame(root)
     right.pack(side="left", padx=10, pady=10, fill="both", expand=True)
 
     table = ConfidenceTable(right)
+
+    # initial prediction for blank canvas
+    try:
+        do_predict()
+    except Exception:
+        pass
 
     # Randomize scores (press 'r')
     def randomize_scores(event=None):

@@ -6,6 +6,7 @@ from lib.datasets.png_dataset import PNGDataset
 from lib.datasets.emnist_dataset import EMNISTCSVProvider
 from lib.models.CNN import CNNShape, CNNShapeTester
 from lib.pipeline import run_training
+from datetime import datetime
 
 def run_png_knn():
     dataset = PNGDataset("data/distorted", test_dir="data/characters", test_fraction=0.1)
@@ -19,11 +20,15 @@ def run_emnist_svm():
 
 def run_png_cnn():
     dataset = PNGDataset("data/distorted", test_dir="data/characters", test_fraction=0.1)
+    cnn_shape = CNNShape(name="CNN_png", input_shape=[1, 64, 64], conv_channels=[64, 128, 128, 128], fc_units=[512, 256])
     model = CNNClassifier(
-        epochs=10,
-        batch_size=128
+        epochs=500,
+        batch_size=128,
+        cnn_shape=cnn_shape,
     )
-    run_training(model, dataset)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_training(model, dataset, save_path=f"models/cnn_png_{timestamp}.pt")
 
 def run_png_cnn_shapes():
     # Load dataset
@@ -50,7 +55,7 @@ def run_png_cnn_shapes():
         shapes.append(shape)
     
     # Initialize tester
-    tester = CNNShapeTester(dataset, epochs=200, batch_size=64)
+    tester = CNNShapeTester(dataset, epochs=100, batch_size=64)
 
     # Run tests
     results = tester.test_shapes(shapes)
@@ -77,6 +82,6 @@ if __name__ == "__main__":
     # Choose which example to run
     # run_png_knn()
     # run_emnist_svm()
-    # run_png_cnn()
-    run_png_cnn_shapes()
+    run_png_cnn()
+    # run_png_cnn_shapes()
     # run_emnist_cnn()

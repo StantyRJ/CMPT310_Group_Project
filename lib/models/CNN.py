@@ -196,6 +196,77 @@ class CNNClassifier(Classifier):
                 preds.extend(pred)
 
         return np.array(preds)
+    
+    def predict_conf(self, X: Sequence) -> np.ndarray:
+        """
+        Returns softmax probabilities for each class.
+        Output shape: (N, num_classes)
+        """
+        if self.model is None:
+            raise RuntimeError("Call fit() or load() before predict_proba().")
+
+        X_tensor = torch.tensor(np.asarray(X), dtype=torch.float32)
+        X_tensor = (X_tensor - self.norm_mean) / self.norm_std
+        X_tensor = X_tensor.to(self.device)
+
+        self.model.eval()
+        probs = []
+
+        loader = DataLoader(TensorDataset(X_tensor), batch_size=self.batch_size, shuffle=False)
+
+        for batch in tqdm(loader, desc="Predicting (proba)", leave=False):
+            x_batch = batch[0].to(self.device)
+            with torch.no_grad():
+                logits = self.model(x_batch)                 # shape (B, C)
+                softmax = torch.softmax(logits, dim=1)       # shape (B, C)
+                probs.append(softmax.cpu().numpy())
+
+        return np.vstack(probs)
+
+    
+    def save(self, path: str):
+        """
+        Save the CNN model state, normalization stats, and label map.
+        """
+        if self.model is None:
+            raise RuntimeError("No model to save. Call fit() first.")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        torch.save({
+            "model_state": self.model.state_dict(),
+            "cnn_shape": self.cnn_shape,  # save the architecture definition
+            "norm_mean": self.norm_mean,
+            "norm_std": self.norm_std,
+            "label_map": self.label_map
+        }, path)
+        tqdm.write(f"Model saved to {path}")
+
+    def load(self, path: str):
+        """
+        Load the CNN model state, normalization stats, and label map.
+        """
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"No model file found at {path}")
+
+        checkpoint = torch.load(path, map_location=self.device, weights_only=False)
+        
+        # Restore architecture
+        self.cnn_shape = checkpoint.get("cnn_shape", None)
+        if self.cnn_shape is not None:
+            self.model = self.cnn_shape
+        else:
+            raise RuntimeError("Saved checkpoint does not contain CNNShape object")
+
+        # Load state dict
+        self.model.load_state_dict(checkpoint["model_state"])
+        self.model.to(self.device)
+        self.model.eval()
+
+        # Restore normalization and labels
+        self.norm_mean = checkpoint.get("norm_mean", None)
+        self.norm_std = checkpoint.get("norm_std", None)
+        self.label_map = checkpoint.get("label_map", None)
+
+        tqdm.write(f"Model loaded from {path}")
 
 class CNNShapeTester:
     """
