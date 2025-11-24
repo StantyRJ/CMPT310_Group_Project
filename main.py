@@ -37,7 +37,7 @@ def run_png_cnn():
     )
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_training(model, dataset, save_path=f"models/cnn_png_{timestamp}.pt")
+    run_training(model, dataset, save_file=f"models/cnn_png_{timestamp}.pt")
 
 def run_png_cnn_shapes():
     # Load dataset
@@ -131,9 +131,9 @@ def run_png_knn_sweep():
 if __name__ == "__main__":
     # Choose which example to run
     # run_png_knn_sweep()
-    #run_png_svm()
+    run_png_svm()
     #run_png_knn()
     # run_emnist_svm()
     # run_png_cnn()
-    run_png_cnn_shapes()
+    # run_png_cnn_shapes()
     # run_emnist_cnn()

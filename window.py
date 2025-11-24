@@ -64,8 +64,9 @@ ERASE_COLOR = (255, 255, 255)
 # ---------------------------------------------------------------
 # Character classes (62)
 CLASSES = (
-    [chr(ord("a") + i) for i in range(26)] +
+    # Match the dataset ordering (uppercase first, then lowercase, then digits)
     [chr(ord("A") + i) for i in range(26)] +
+    [chr(ord("a") + i) for i in range(26)] +
     [str(i) for i in range(10)]
 )
 
@@ -303,9 +304,9 @@ class ConfidenceTable:
 # ---------------------------------------------------------------
 if __name__ == "__main__":
     cnn = CNNClassifier(device="cpu")
-    cnn.load("models/cnn_png_20251123_203830.pt")
+    cnn.load("models/cnn_png_20251124_131136.pt")
     svm = SVMClassifier()
-    svm.load("models/svm_png_20251124_111810.pt")
+    svm.load("models/svm_png_20251124_133117.pt")
 
     # Prepare KNN trained on the PNG dataset (uses same pre-processing as in main.py)
     try:
