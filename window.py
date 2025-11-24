@@ -46,7 +46,8 @@ from tkinter import ttk
 import random
 import numpy as np
 
-from lib.models import CNNClassifier
+from lib.models import CNNClassifier, KNNClassifier
+from lib.datasets.png_dataset import PNGDataset
 
 # ---------------------------------------------------------------
 # Grid sizes
@@ -264,13 +265,23 @@ class ConfidenceTable:
                 f"{knn[i]:.4f}",
             ))
 
-
 # ---------------------------------------------------------------
 # Main UI Layout
 # ---------------------------------------------------------------
 if __name__ == "__main__":
     cnn = CNNClassifier(device="cpu")
     cnn.load("models/cnn_png_20251123_203830.pt")
+
+    # Prepare KNN trained on the PNG dataset (uses same pre-processing as in main.py)
+    try:
+        png_ds = PNGDataset("data/distorted", test_dir="data/characters", test_fraction=0.1)
+        X_train, y_train, _, _ = png_ds.load()
+        knn = KNNClassifier(K=3)
+        knn.fit(X_train, y_train)
+        print(f"KNN trained on {len(X_train)} samples")
+    except Exception as e:
+        print("Failed to prepare KNN dataset:", e)
+        knn = None
 
     root = tk.Tk()
     root.title("Model Playground")
@@ -297,19 +308,55 @@ if __name__ == "__main__":
         poll_after["id"] = None
         try:
             arr = canvas.get_image()
-            preds = cnn.predict_conf(arr)
 
-            # preds may be a (1, C) numpy array from predict_conf; convert to flat list of floats
-            if isinstance(preds, np.ndarray):
-                if preds.ndim == 2 and preds.shape[0] == 1:
-                    probs = preds[0].astype(float).tolist()
+            # Convert drawing to same normalization as dataset: PNGDataset uses ToTensor()+Normalize((0.5,),(0.5,))
+            # which maps image in [0,1] -> [-1,1]. get_image() returns [0,1] inverted (black=1).
+            arr_norm = arr * 2.0 - 1.0
+
+            # --- CNN probabilities mapped into UI ordering (length 62) ---
+            probs62 = [0.0] * len(CLASSES)
+            try:
+                preds = cnn.predict_conf(arr_norm)
+                if isinstance(preds, np.ndarray):
+                    if preds.ndim == 2 and preds.shape[0] == 1:
+                        model_probs = preds[0].astype(float)
+                    else:
+                        model_probs = preds.flatten().astype(float)
                 else:
-                    probs = preds.flatten().astype(float).tolist()
-            else:
-                # fallback: try to coerce to list of floats
-                probs = [float(x) for x in preds]
+                    model_probs = np.asarray(preds, dtype=float)
 
-            table.update_model_confidence({"cnn": probs, "svm": [0.0] * len(CLASSES), "knn": [0.0] * len(CLASSES)})
+                # Map model_probs (indices 0..model_C-1) into UI class order (0..61)
+                label_map = getattr(cnn, "label_map", None)
+                if label_map is None:
+                    # assume model index matches dataset label directly
+                    for i, p in enumerate(model_probs):
+                        if 0 <= i < len(probs62):
+                            probs62[i] = float(p)
+                else:
+                    # invert label_map: original_label -> model_idx, so invert to model_idx -> original_label
+                    inv = {v: k for k, v in label_map.items()}
+                    for model_idx, p in enumerate(model_probs.tolist()):
+                        orig_label = inv.get(model_idx)
+                        if orig_label is not None and 0 <= orig_label < len(probs62):
+                            probs62[int(orig_label)] = float(p)
+            except Exception as e:
+                print("CNN predict error:", e)
+
+            # --- KNN: compute neighbor vote distribution and map into UI ordering ---
+            knn_probs62 = [0.0] * len(CLASSES)
+            try:
+                if knn is not None and getattr(knn, "tree", None) is not None:
+                    # KDTree expects flattened samples
+                    sample = arr_norm.reshape(1, -1)
+                    dist, idx = knn.tree.query(sample, k=knn.K)
+                    neighbor_labels = knn.y_train[idx[0]]
+                    counts = np.bincount(neighbor_labels, minlength=len(CLASSES)).astype(float)
+                    if counts.sum() > 0:
+                        knn_probs62 = (counts / counts.sum()).tolist()
+            except Exception as e:
+                print("KNN predict error:", e)
+
+            table.update_model_confidence({"cnn": probs62, "svm": [0.0] * len(CLASSES), "knn": knn_probs62})
         except Exception as e:
             # keep UI live even if prediction fails
             print("Prediction error:", e)
