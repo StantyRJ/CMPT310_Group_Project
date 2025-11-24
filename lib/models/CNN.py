@@ -1,197 +1,223 @@
 import os
+from typing import Sequence, Optional
+from tqdm import tqdm
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset, random_split
 import torch.optim as optim
-from tqdm import tqdm
-from typing import Sequence, Optional
 from .base import Classifier
-import numpy as np
+from typing import Union, List, Dict, Optional
 
-class SimpleCNN(nn.Module):
-    def __init__(self, num_classes=62):
+class CNNShape(nn.Module):
+    def __init__(self, name="CNN", input_shape=(1, 32, 32), num_classes=62,
+                 conv_channels=(64, 128, 256), fc_units=1024, dropout=0.4):
         super().__init__()
-        
-        self.conv1 = nn.Conv2d(1, 64, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
-        
-        self.bn1 = nn.BatchNorm2d(64)
-        self.bn2 = nn.BatchNorm2d(128)
-        self.bn3 = nn.BatchNorm2d(256)
-        
+        self.name = name
+        self.layers = nn.ModuleList()
+        self.bns = nn.ModuleList()
+        in_ch = input_shape[0]
+        H, W = input_shape[1], input_shape[2]
+
+        # Build conv layers
+        for ch in conv_channels:
+            self.layers.append(nn.Conv2d(in_ch, ch, kernel_size=3, padding=1))
+            self.bns.append(nn.BatchNorm2d(ch))
+            in_ch = ch
+            # MaxPool reduces spatial size by factor of 2
+            H = H // 2
+            W = W // 2
+
         self.pool = nn.MaxPool2d(2, 2)
-        self.dropout = nn.Dropout(0.4)
-        
-        self.fc1 = nn.Linear(256 * 8 * 8, 1024)
-        self.fc2 = nn.Linear(1024, num_classes)
-    
+        self.dropout = nn.Dropout(dropout)
+
+        flattened_size = conv_channels[-1] * H * W
+        self.fc1 = nn.Linear(flattened_size, fc_units)
+        self.fc2 = nn.Linear(fc_units, num_classes)
+
     def forward(self, x):
-        x = self.pool(F.relu(self.bn1(self.conv1(x))))
-        x = self.pool(F.relu(self.bn2(self.conv2(x))))
-        x = self.pool(F.relu(self.bn3(self.conv3(x))))
-        
+        for conv, bn in zip(self.layers, self.bns):
+            x = self.pool(F.relu(bn(conv(x))))
         x = x.view(x.size(0), -1)
         x = F.relu(self.fc1(x))
         x = self.dropout(x)
         return self.fc2(x)
 
-def CNN(data, epochs=100, batch_size=64):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    tqdm.write(f"CNN using device=\"{device}\"")
-    
-    images = torch.stack([d[0] for d in data])
-    labels = torch.tensor([d[1] for d in data], dtype=torch.long)
-    
-    unique_labels = sorted(set(labels.tolist()))
-    label_map = {old: new for new, old in enumerate(unique_labels)}
-    labels = torch.tensor([label_map[label.item()] for label in labels], dtype=torch.long)
-    num_classes = len(unique_labels)
-    
-    mean = images.mean()
-    std = images.std()
-    images = (images - mean) / std
-    
-    dataset = TensorDataset(images, labels)
-    val_size = int(0.15 * len(dataset))
-    train_size = len(dataset) - val_size
-    train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
-    
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-    
-    model = SimpleCNN(num_classes).to(device)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.AdamW(model.parameters(), lr=0.002, weight_decay=0.01)
-    scheduler = optim.lr_scheduler.OneCycleLR(
-        optimizer, max_lr=0.002, epochs=epochs, 
-        steps_per_epoch=len(train_loader), pct_start=0.3
-    )
-    
-    best_val_acc = 0.0
-    best_model_state = None
-    
-    for epoch in tqdm(range(epochs), desc="Epochs", leave=False):
-        model.train()
-        train_correct = 0
-        train_total = 0
-        
-        # Batch loop with progress bar
-        for x_batch, y_batch in tqdm(train_loader, desc="train_loader", leave=False):
-            x_batch, y_batch = x_batch.to(device), y_batch.to(device)
-            
-            optimizer.zero_grad()
-            outputs = model(x_batch)
-            loss = criterion(outputs, y_batch)
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
-            
-            _, predicted = outputs.max(1)
-            train_total += y_batch.size(0)
-            train_correct += predicted.eq(y_batch).sum().item()
-        
-        train_acc = 100. * train_correct / train_total
-        
-        model.eval()
-        val_correct = 0
-        val_total = 0
-        
-        for x_batch, y_batch in tqdm(val_loader, desc="Validation Batches", leave=False):
-            x_batch, y_batch = x_batch.to(device), y_batch.to(device)
-            with torch.no_grad():
-                outputs = model(x_batch)
-                _, predicted = outputs.max(1)
-                val_total += y_batch.size(0)
-                val_correct += predicted.eq(y_batch).sum().item()
-        
-        val_acc = 100. * val_correct / val_total
-        
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            best_model_state = model.state_dict().copy()
-        
-        if (epoch + 1) % 10 == 0:
-            tqdm.write(f"Epoch {epoch+1}/{epochs} - Train: {train_acc:.2f}%, Val: {val_acc:.2f}%")
-    
-    if best_model_state is not None:
-        model.load_state_dict(best_model_state)
-    
-    model.norm_mean = mean
-    model.norm_std = std
-    model.label_map = label_map
-
-    # Save the model
-    scriptPath = os.path.dirname(os.path.abspath(__file__))
-    savePath = os.path.join(scriptPath, "..", "CNN_model.pth")
-    torch.save(
-        {
-            'modelState': model.state_dict(),
-            'mean': model.norm_mean,
-            'std': model.norm_std,
-            'labelMap': model.label_map
-        },
-        savePath)
-    
-    return model
-
-def load_cnn_model():
-    #
-    # Load the saved model
-    if not os.path.exists("../CNN_model.pth"):
-        return ""
-    #
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    saved = torch.load("../CNN_model.pt", map_location=device)
-    #
-    model = SimpleCNN().to(device)
-    model.load_state_dict(saved["modelState"])
-    model.eval()    
-
-    model.norm_mean = saved["mean"]
-    model.norm_std  = saved["std"]
-    model.label_map = saved["labelMap"]
-
-    return model
-
 class CNNClassifier(Classifier):
-    def __init__(self, epochs: int = 20, batch_size: int = 64, device: Optional[str] = None):
+    """
+    Unified CNN classifier using a CNNShape definition.
+    """
+
+    def __init__(
+        self,
+        epochs: int = 20,
+        batch_size: int = 64,
+        device: Optional[str] = None,
+        lr: float = 0.002,
+        weight_decay: float = 0.01,
+        cnn_shape: Optional[CNNShape] = None,
+    ):
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.lr = lr
+        self.weight_decay = weight_decay
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.cnn_shape = cnn_shape  # Allow custom CNN architectures
+        self.model: Optional[CNNShape] = None
+
+        self.norm_mean: Optional[torch.Tensor] = None
+        self.norm_std: Optional[torch.Tensor] = None
+        self.label_map: Optional[dict] = None
+
+    def _prepare_dataset(self, X: Sequence, y: Sequence) -> TensorDataset:
+        if not isinstance(X, torch.Tensor):
+            X = torch.tensor(np.asarray(X), dtype=torch.float32)
+        y = torch.tensor(np.asarray(y), dtype=torch.long)
+        return TensorDataset(X, y)
+
+    def fit(self, X: Sequence, y: Sequence) -> None:
+        # Map labels to 0..num_classes-1
+        unique_labels = sorted(set(y))
+        self.label_map = {old: new for new, old in enumerate(unique_labels)}
+        mapped_labels = torch.tensor([self.label_map[label] for label in y], dtype=torch.long)
+
+        X_tensor = torch.tensor(np.asarray(X), dtype=torch.float32)
+        self.norm_mean = X_tensor.mean()
+        self.norm_std = X_tensor.std()
+        X_tensor = (X_tensor - self.norm_mean) / self.norm_std
+
+        dataset = TensorDataset(X_tensor, mapped_labels)
+        val_size = int(0.15 * len(dataset))
+        train_size = len(dataset) - val_size
+        train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+
+        train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
+
+        num_classes = len(unique_labels)
+        self.model = self.cnn_shape or CNNShape(num_classes=num_classes)
+        self.model.to(self.device)
+
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        scheduler = optim.lr_scheduler.OneCycleLR(
+            optimizer, max_lr=self.lr, epochs=self.epochs, steps_per_epoch=len(train_loader), pct_start=0.3
+        )
+
+        best_val_acc = 0.0
+        best_state = None
+
+        for epoch in tqdm(range(self.epochs), desc="Epochs", leave=False):
+            self.model.train()
+            train_correct, train_total = 0, 0
+            for x_batch, y_batch in tqdm(train_loader, desc="Training", leave=False):
+                x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
+                optimizer.zero_grad()
+                outputs = self.model(x_batch)
+                loss = criterion(outputs, y_batch)
+                loss.backward()
+                optimizer.step()
+                scheduler.step()
+
+                _, predicted = outputs.max(1)
+                train_total += y_batch.size(0)
+                train_correct += predicted.eq(y_batch).sum().item()
+
+            train_acc = 100 * train_correct / train_total
+
+            self.model.eval()
+            val_correct, val_total = 0, 0
+            for x_batch, y_batch in tqdm(val_loader, desc="Validation", leave=False):
+                x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
+                with torch.no_grad():
+                    outputs = self.model(x_batch)
+                    _, predicted = outputs.max(1)
+                    val_total += y_batch.size(0)
+                    val_correct += predicted.eq(y_batch).sum().item()
+
+            val_acc = 100 * val_correct / val_total
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+                best_state = self.model.state_dict().copy()
+
+            if (epoch + 1) % 10 == 0:
+                tqdm.write(f"Epoch {epoch+1}/{self.epochs} - Train: {train_acc:.2f}%, Val: {val_acc:.2f}%")
+
+        if best_state is not None:
+            self.model.load_state_dict(best_state)
+
+    def predict(self, X: Sequence) -> np.ndarray:
+        if self.model is None:
+            raise RuntimeError("Call fit() before predict().")
+
+        X_tensor = torch.tensor(np.asarray(X), dtype=torch.float32)
+        X_tensor = (X_tensor - self.norm_mean) / self.norm_std
+        X_tensor = X_tensor.to(self.device)
+
+        self.model.eval()
+        preds = []
+        loader = DataLoader(TensorDataset(X_tensor), batch_size=self.batch_size, shuffle=False)
+        for batch in tqdm(loader, desc="Predicting", leave=False):
+            x_batch = batch[0].to(self.device)
+            with torch.no_grad():
+                outputs = self.model(x_batch)
+                pred = outputs.argmax(1).cpu().numpy()
+                preds.extend(pred)
+
+        return np.array(preds)
+
+class CNNShapeTester:
+    """
+    Given a dataset builder (like PNGDataset) and multiple CNNShape configurations,
+    trains and evaluates each shape. Reports holdout accuracy for comparison.
+    """
+
+    def __init__(self, dataset_builder, epochs: int = 20, batch_size: int = 64, device: Optional[str] = None):
+        """
+        dataset_builder: object with a .load() method that returns
+            X_train, y_train, X_test, y_test
+        """
+        self.dataset_builder = dataset_builder
         self.epochs = epochs
         self.batch_size = batch_size
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.model: Optional[CNN] = None
+        self.results: Dict[str, float] = {}  # maps shape name to holdout accuracy
 
-    def _to_dataset(self, X: Sequence, y: Sequence) -> TensorDataset:
-        # Accept X as either torch tensors, lists, or numpy arrays shaped (N, C, H, W)
-        if isinstance(X, torch.Tensor):
-            X_tensor = X
-        else:
-            X_tensor = torch.tensor(np.asarray(X), dtype=torch.float32)
-        y_tensor = torch.tensor(np.asarray(y), dtype=torch.long)
-        return TensorDataset(X_tensor, y_tensor)
+        # Load the dataset arrays
+        self.X_train, self.y_train, self.X_test, self.y_test = self.dataset_builder.load()
 
-    def fit(self, X: Sequence, y: Sequence) -> None:
-        dataset = self._to_dataset(X, y)
-        # Your CNN constructor previously accepted a dataset, epochs and batch_size
-        self.model = CNN(dataset, epochs=self.epochs, batch_size=self.batch_size)
-        # After training, move model to device
-        self.model.to(self.device)
+    def test_shapes(self, shapes: List[CNNShape]):
+        """
+        Accepts a list of CNNShape instances, trains a CNNClassifier for each, evaluates holdout accuracy.
+        Returns a dict mapping shape names to accuracy.
+        """
+        for shape in shapes:
+            print(f"\nTesting shape: {shape.name}")
+            model = CNNClassifier(
+                epochs=self.epochs,
+                batch_size=self.batch_size,
+                cnn_shape=shape,
+                device=self.device
+            )
 
-    def predict(self, X: Sequence) -> Sequence:
-        if self.model is None:
-            raise RuntimeError("Call fit() before predict().")
-        # Convert input
-        if not isinstance(X, torch.Tensor):
-            X_tensor = torch.tensor(np.asarray(X), dtype=torch.float32)
-        else:
-            X_tensor = X
-        self.model.eval()
-        with torch.no_grad():
-            X_tensor = X_tensor.to(self.device)
-            # Normalize if model exposes norm_mean/norm_std
-            if hasattr(self.model, "norm_mean") and hasattr(self.model, "norm_std"):
-                X_tensor = (X_tensor - self.model.norm_mean) / self.model.norm_std
-            outputs = self.model(X_tensor)
-            preds = outputs.argmax(1).cpu().numpy()
-        return preds.tolist()
+            # Run training
+            model.fit(self.X_train, self.y_train)
+
+            # Evaluate holdout set
+            holdout_preds = model.predict(self.X_test)
+            correct = sum(p == t for p, t in zip(holdout_preds, self.y_test))
+            total = len(self.y_test)
+            accuracy = 100.0 * correct / total if total > 0 else 0.0
+            print(f"Shape {shape.name} Holdout Accuracy: {accuracy:.2f}% ({correct}/{total})")
+
+            self.results[shape.name] = accuracy
+
+        return self.results
+
+    def best_shape(self) -> Optional[str]:
+        """Return the shape name with highest accuracy, or None if no results."""
+        if not self.results:
+            return None
+        return max(self.results, key=self.results.get)
