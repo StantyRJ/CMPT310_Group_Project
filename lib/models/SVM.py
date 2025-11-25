@@ -9,25 +9,29 @@ from .base import Classifier
 
 
 class SVMClassifier(Classifier):
-    """
-    SVM classifier with:
-    - consistent normalization (mean/std)
-    - label mapping identical to CNNClassifier
-    - predict_conf() returning correct class-ordered probabilities
-    """
-
     def __init__(
         self,
         kernel: str = "rbf",
-        C: float = 2.0,
-        gamma: str = "scale",
+        C: float = 1.0,
+        gamma: float = "scale",
+        coef0: float = 0.0,
+        degree: int = 3,
+        shrinking: bool = True,
+        tol: float = 1e-3,
+        cache_size: float = 200.0,
         probability: bool = True
     ):
         self.kernel = kernel
         self.C = C
         self.gamma = gamma
+        self.coef0 = coef0
+        self.degree = degree
+        self.shrinking = shrinking
+        self.tol = tol
+        self.cache_size = cache_size
+        self.probability = probability
+        
         self.model: Optional[SVC] = None
-
         self.scaler: Optional[StandardScaler] = None
         self.label_map: Optional[Dict[int, int]] = None
 
@@ -52,7 +56,12 @@ class SVMClassifier(Classifier):
             kernel=self.kernel,
             C=self.C,
             gamma=self.gamma,
-            probability=True
+            coef0=self.coef0,
+            degree=self.degree,
+            shrinking=self.shrinking,
+            tol=self.tol,
+            cache_size=self.cache_size,
+            probability=self.probability
         )
 
         self.model.fit(X_norm, mapped_y)
