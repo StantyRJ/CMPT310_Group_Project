@@ -130,8 +130,8 @@ def run_png_knn_sweep():
 
 if __name__ == "__main__":
     # Choose which example to run
-    # run_png_knn_sweep()
-    run_png_svm()
+    run_png_knn_sweep()
+    # run_png_svm()
     #run_png_knn()
     # run_emnist_svm()
     # run_png_cnn()
