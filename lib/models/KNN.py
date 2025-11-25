@@ -1,5 +1,5 @@
 import numpy as np
-from sklearn.neighbors import KDTree
+from sklearn.neighbors import BallTree
 from tqdm import tqdm
 from typing import Sequence
 from .base import Classifier
@@ -7,24 +7,24 @@ from .base import Classifier
 
 class KNNClassifier(Classifier):
     """
-    K-Nearest Neighbors classifier using KDTree acceleration.
+    K-Nearest Neighbors classifier using BallTree acceleration.
     
     Attributes:
         K (int): Number of neighbors to consider in prediction.
         X_train (np.ndarray): Flattened training feature vectors.
         y_train (np.ndarray): Training labels.
-        tree (KDTree): KDTree built on training data.
+        tree (BallTree): BallTree built on training data.
     """
 
     def __init__(self, K: int = 1):
         self.K = K
         self.X_train: np.ndarray | None = None
         self.y_train: np.ndarray | None = None
-        self.tree: KDTree | None = None
+        self.tree: BallTree | None = None
 
     def fit(self, X: Sequence, y: Sequence) -> None:
         """
-        Fit the KNN model by storing training data and building a KDTree.
+        Fit the KNN model by storing training data and building a BallTree.
 
         Args:
             X: array-like of shape (N, ...) - training features
@@ -40,13 +40,13 @@ class KNNClassifier(Classifier):
         self.X_train = X
         self.y_train = y
 
-        tqdm.write("Building KDTree…")
-        self.tree = KDTree(self.X_train, metric="manhattan")
-        tqdm.write("KDTree built.")
+        tqdm.write("Building BallTree…")
+        self.tree = BallTree(self.X_train, metric="manhattan")
+        tqdm.write("BallTree built.")
 
     def predict(self, X: Sequence) -> np.ndarray:
         """
-        Predict labels for the input data using KDTree nearest neighbors.
+        Predict labels for the input data using BallTree nearest neighbors.
 
         Args:
             X: array-like of shape (N, ...) - test features
@@ -76,7 +76,7 @@ class KNNClassifier(Classifier):
 
         return np.array(preds)
 
-    def optimize_K(self, X: Sequence, y: Sequence, k_min: int = 1, k_max: int = 25):
+    def optimize_K(self, X: Sequence, y: Sequence, k_min: int = 1, k_max: int = 25, show_plot = False):
         """
         Sweep K values to find the one with the highest accuracy.
 
@@ -95,7 +95,7 @@ class KNNClassifier(Classifier):
         if X.ndim > 2:
             X = X.reshape(X.shape[0], -1)
 
-        tree = KDTree(X, metric="manhattan")
+        tree = BallTree(X, metric="manhatten")
 
         # Precompute neighbor indices
         tqdm.write("Precomputing neighbor indices…")

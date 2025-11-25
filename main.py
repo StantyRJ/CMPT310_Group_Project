@@ -7,6 +7,8 @@ from lib.datasets.emnist_dataset import EMNISTCSVProvider
 from lib.models.CNN import CNNShape, CNNShapeTester
 from lib.pipeline import run_training
 from datetime import datetime
+import matplotlib.pyplot as plot
+
 
 def run_png_knn():
     dataset = PNGDataset("data/distorted", test_dir="data/characters", test_fraction=0.1)
@@ -123,16 +125,23 @@ def run_png_knn_sweep():
 
     run_training(best_model, dataset, save_file=f"models/knn_png_bestK{best_k}_{timestamp}.pt")
 
-
+    #
+    # Plot the results
+    plot.plot(list(results.keys()), list(results.values()))
+    plot.title("KNN Accuracy For Different K")
+    plot.xlabel("K")
+    plot.ylabel("Accuracy")
+    plot.grid(True)
+    plot.show()
 
 # NOTE: EMNIST database: https://www.kaggle.com/datasets/crawford/emnist?resource=download
 # Please download the needed sets manually. MNIST files also need to be downloaded separately.
 
 if __name__ == "__main__":
     # Choose which example to run
-    #run_png_knn_sweep()
-    run_png_svm()
-    #run_png_knn()
+    run_png_knn_sweep()
+    # run_png_svm()
+    # run_png_knn()
     # run_emnist_svm()
     # run_png_cnn()
     # run_png_cnn_shapes()
