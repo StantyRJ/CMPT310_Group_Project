@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+import glob
 
 # Ensure Tcl/Tk runtime can be found when using virtual environments or unusual installs.
 # Try a few likely locations (sys.base_prefix, sys.prefix, and the common AppData path).
@@ -303,10 +304,16 @@ class ConfidenceTable:
 # Main UI Layout
 # ---------------------------------------------------------------
 if __name__ == "__main__":
+    cnn_files = glob.glob("models/cnn_png*.pt")
+    svm_files = glob.glob("models/svm_png*.pt")
+
+    if not cnn_files or not svm_files:
+        raise FileNotFoundError("Matching model files not found")
+
     cnn = CNNClassifier(device="cpu")
-    cnn.load("models/cnn_png_20251123_203830.pt")
+    cnn.load(cnn_files[0])
     svm = SVMClassifier()
-    svm.load("models/svm_png_20251123_234025.pt")
+    svm.load(svm_files[0])
 
     # Prepare KNN trained on the PNG dataset (uses same pre-processing as in main.py)
     try:
@@ -321,7 +328,8 @@ if __name__ == "__main__":
         #else:
         #    X_train_flat = X_train_flat * 2.0 - 1.0   # scale 0..1 -> -1..1
 
-        knn = KNNClassifier(1)
+        # K=6 is the most accurate K
+        knn = KNNClassifier(6)
         knn.fit(X_train_flat, y_train)
         print(f"KNN trained on {len(X_train)} samples")
     except Exception as e:
