@@ -1,6 +1,7 @@
 import json
 
 from tqdm import tqdm
+from lib.datasets.preloaded import PreloadedDatasetProvider
 from lib.models import KNNClassifier, SVMClassifier, CNNClassifier
 from lib.datasets.png_dataset import PNGDataset
 from lib.datasets.emnist_dataset import EMNISTCSVProvider
@@ -8,12 +9,18 @@ from lib.models.CNN import CNNShape, CNNShapeTester
 from lib.pipeline import run_training
 from datetime import datetime
 import matplotlib.pyplot as plot
-
+from concurrent.futures import ProcessPoolExecutor
+from functools import partial
 
 def run_png_knn():
     dataset = PNGDataset("data/distorted", test_dir="data/characters", test_fraction=0.1)
     model = KNNClassifier(K=3)
-    run_training(model, dataset)
+    run_training(model=model, dataset_provider=dataset)
+
+def run_emnist_knn():
+    dataset = EMNISTCSVProvider("emnist-balanced-train.csv", test_fraction=0.1, max_samples=20000)
+    model = KNNClassifier(K=1)
+    run_training(model=model, dataset_provider=dataset)
 
 def run_png_svm():
     dataset = PNGDataset("data/distorted", test_dir="data/characters", test_fraction=0.8)
@@ -24,7 +31,7 @@ def run_png_svm():
 
 def run_emnist_svm():
     dataset = EMNISTCSVProvider(csv_path="emnist-balanced-train.csv", test_fraction=0.1, max_samples=5000)
-    model = SVMClassifier()
+    model = SVMClassifier(kernel="rbf", C=10.0, gamma=0.001, coef0=0.0, degree=3, shrinking=True, tol=0.01, cache_size=200)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_training(model, dataset, save_file=f"models/svm_emnist_{timestamp}.pt")
@@ -80,58 +87,93 @@ def run_png_cnn_shapes():
 
 def run_emnist_cnn():
     dataset = EMNISTCSVProvider("emnist-balanced-train.csv", test_fraction=0.1, max_samples=20000)
+    shape = CNNShape("best_emnist", input_shape=(1, 64, 64), conv_channels = [
+            32,
+            64,
+            128,
+            128
+        ],
+        fc_units= [
+            256,
+            128
+        ])
     model = CNNClassifier(
-        epochs=10,
-        batch_size=128
+        epochs=100,
+        batch_size=128,
+        cnn_shape=shape
     )
     run_training(model, dataset)
 
+def _evaluate_k(k, e_dataset, o_dataset):
+    """Runs training for a single K and returns (k, (o_acc, e_acc))."""
+    model = KNNClassifier(K=k)
+
+    # run EMNIST
+    e_output = run_training(model, e_dataset)
+    if isinstance(e_output, dict):
+        e_acc = e_output.get("accuracy") or e_output.get("test_accuracy")
+        if e_acc is None:
+            raise ValueError(f"Missing accuracy key in {e_output.keys()}")
+    else:
+        e_acc = float(e_output)
+
+    # run PNG dataset
+    o_output = run_training(model, o_dataset)
+    if isinstance(o_output, dict):
+        o_acc = o_output.get("accuracy") or o_output.get("test_accuracy")
+        if o_acc is None:
+            raise ValueError(f"Missing accuracy key in {o_output.keys()}")
+    else:
+        o_acc = float(o_output)
+
+    return k, (o_acc, e_acc)
+
+
 def run_png_knn_sweep():
-    dataset = PNGDataset("data/distorted", test_dir="data/characters", test_fraction=0.1)
+    # --- Load datasets ---
+    e_dataset = EMNISTCSVProvider("emnist-balanced-train.csv",
+                                  test_fraction=0.1, max_samples=20000)
+    o_dataset = PNGDataset("data/distorted",
+                           test_dir="data/characters", test_fraction=0.1)
 
-    K_values = [1, 3, 5, 7, 9, 11, 15]
+    a, b, c, d = e_dataset.load()
+    e_dataset = PreloadedDatasetProvider(a, b, c, d)
+
+    a, b, c, d = o_dataset.load()
+    o_dataset = PreloadedDatasetProvider(a, b, c, d)
+
+    # K values
+    K_values = [1, 2, 3, 5, 7, 9, 11, 15]
+
+    # --- Parallel sweep ---
     results = {}
+    eval_fn = partial(_evaluate_k, e_dataset=e_dataset, o_dataset=o_dataset)
 
-    for k in K_values:
-        tqdm.write(f"\nTesting K = {k}")
-        model = KNNClassifier(K=k)
+    with ProcessPoolExecutor(max_workers=10) as executor:
+        for k, (o_acc, e_acc) in executor.map(eval_fn, K_values):
+            tqdm.write(f"K={k} → o_acc={o_acc:.4f}, e_acc={e_acc:.4f}")
+            results[k] = (o_acc, e_acc)
 
-        output = run_training(model, dataset)
-
-        # Try the common keys for accuracy
-        if isinstance(output, dict):
-            if "accuracy" in output:
-                acc = output["accuracy"]
-            elif "test_accuracy" in output:
-                acc = output["test_accuracy"]
-            else:
-                raise ValueError(f"Could not find accuracy in output keys: {output.keys()}")
-        else:
-            acc = float(output)
-
-        results[k] = acc
-
+    # --- Best K ---
     best_k = max(results, key=results.get)
     best_acc = results[best_k]
 
-    tqdm.write("\n=== KNN Sweep Results ===")
-    for k, acc in results.items():
-        tqdm.write(f"K={k}: {acc:.4f}")
+    tqdm.write(f"\n=== Best K: {best_k} with accuracy {best_acc} ===\n")
 
-    tqdm.write(f"\n✅ Best K: {best_k} with accuracy {best_acc:.4f}")
+    # --- Plotting ---
+    Ks = list(results.keys())
+    o_accs = [results[k][0] for k in Ks]
+    e_accs = [results[k][1] for k in Ks]
 
-    best_model = KNNClassifier(K=best_k)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    plot.plot(Ks, o_accs, marker='o', label="Our Dataset Accuracy")
+    plot.plot(Ks, e_accs, marker='s', label="EMNIST Accuracy")
 
-    run_training(best_model, dataset, save_file=f"models/knn_png_bestK{best_k}_{timestamp}.pt")
-
-    #
-    # Plot the results
-    plot.plot(list(results.keys()), list(results.values()))
-    plot.title("KNN Accuracy For Different K")
+    plot.title("KNN Accuracy for Different K")
     plot.xlabel("K")
     plot.ylabel("Accuracy")
     plot.grid(True)
+    plot.legend()
+    plot.savefig("knn_sweep.png", dpi=300)
     plot.show()
 
 # NOTE: EMNIST database: https://www.kaggle.com/datasets/crawford/emnist?resource=download
@@ -139,10 +181,11 @@ def run_png_knn_sweep():
 
 if __name__ == "__main__":
     # Choose which example to run
-    # run_png_knn_sweep()
-    run_png_svm()
-    # run_png_knn()
+    run_png_knn_sweep()
+    # run_png_svm()
     # run_emnist_svm()
     # run_png_cnn()
     # run_png_cnn_shapes()
     # run_emnist_cnn()
+    # run_png_knn()
+    # run_emnist_knn()
