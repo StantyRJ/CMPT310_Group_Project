@@ -1,5 +1,6 @@
 from typing import Optional
 import os
+import time
 import numpy as np
 from tqdm import tqdm
 
@@ -17,6 +18,7 @@ def run_training(model, dataset_provider, eval_fn=None, save_file: Optional[str]
     tqdm.write(f"Loaded dataset — train {len(X_train)} samples, test {len(X_test)} samples")
 
     tqdm.write("Fitting model...")
+    start_time = time.time()
     model.fit(X_train, y_train)
     tqdm.write("Predicting...")
     preds = model.predict(X_test)
@@ -24,7 +26,8 @@ def run_training(model, dataset_provider, eval_fn=None, save_file: Optional[str]
     preds = np.asarray(preds)
     y_test = np.asarray(y_test)
     acc = float((preds == y_test).mean())
-    tqdm.write(f"Accuracy: {acc:.4f}")
+    elapsed = time.time() - start_time
+    tqdm.write(f"Accuracy: {acc:.4f}, Elapsed time: {elapsed:.2f} seconds")
 
     if save_file:
         try:

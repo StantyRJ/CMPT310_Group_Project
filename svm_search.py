@@ -1,8 +1,8 @@
 import os
 import json
 import itertools
-import random
 import time
+import random
 from datetime import datetime
 from multiprocessing import Pool, Manager
 
@@ -16,18 +16,17 @@ from lib.datasets.png_dataset import PNGDataset
 ###############################################################################
 
 RESULTS_FILE = "svm_search_results.jsonl"
-CHECKPOINT_FILE = "svm_search_checkpoint.json"
-NUM_WORKERS = 12  # Adjust to your CPU cores
+NUM_WORKERS = 4  # Adjust to your CPU cores
 
 # Reduced search space
-KERNEL_VALUES = ["rbf", "poly", "sigmoid"]
-GAMMA_VALUES = ["scale", 1e-3, 1e-2, 1e-1, 1.0]
-COEF0_VALUES = [0.0, 0.5, 1.0]
+KERNEL_VALUES = ['linear', 'polynomial', 'rbf', 'sigmoid']
+GAMMA_VALUES = [1e-4, 1e-3, 1e-2, 1e-1, 1.0]
+COEF0_VALUES = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
 DEGREE_VALUES = [2, 3]
-C_VALUES = [0.1, 1.0, 10.0]
+C_VALUES = [0.1, 1, 10, 100, 1000]
 SHRINKING_VALUES = [True]
-TOL_VALUES = [1e-3, 1e-2]
-CACHE_SIZE_VALUES = [200]
+TOL_VALUES = [1e-2]
+CACHE_SIZE_VALUES = [2000]
 
 ###############################################################################
 # FILE HELPERS
@@ -41,16 +40,6 @@ def load_results():
                 if line.strip():
                     results.append(json.loads(line))
     return results
-
-def save_checkpoint():
-    results = load_results()
-    checkpoint = {
-        "count": len(results),
-        "last_update": datetime.now().isoformat(timespec="seconds"),
-        "best_accuracy": max((r["accuracy"] for r in results), default=None)
-    }
-    with open(CHECKPOINT_FILE, "w") as f:
-        json.dump(checkpoint, f, indent=2)
 
 def store_result(params, accuracy, duration):
     entry = {
@@ -72,9 +61,9 @@ def generate_all_valid_combinations():
         KERNEL_VALUES, C_VALUES, GAMMA_VALUES, COEF0_VALUES,
         DEGREE_VALUES, SHRINKING_VALUES, TOL_VALUES, CACHE_SIZE_VALUES
     ):
-        if kernel not in ["poly", "sigmoid"] and coef0 != 0:
+        if kernel not in ["polynomial", "sigmoid"] and coef0 != 0:
             continue
-        if kernel != "poly" and degree != 3:
+        if kernel != "polynomial" and degree != 3:
             continue
         combos.append({
             "kernel": kernel,
@@ -93,7 +82,7 @@ def generate_all_valid_combinations():
 ###############################################################################
 
 print("[DATASET] Preloading dataset...")
-png_dataset = PNGDataset("data/distorted", test_dir="data/characters", test_fraction=0.1)
+png_dataset = PNGDataset("data/distorted", test_dir="data/characters", test_fraction=0.6)
 X_train, y_train, X_test, y_test = png_dataset.load()
 dataset_provider = PreloadedDatasetProvider(X_train, y_train, X_test, y_test)
 print("[DATASET] Done preloading.")
@@ -124,10 +113,13 @@ def search_all_parallel():
                    for r in completed}
     remaining = [c for c in all_combos if tuple(c.values()) not in tested_keys]
 
+    # Randomize the order of remaining combinations so tests run in a random sequence
+    random.shuffle(remaining)
+    print(f"[SEARCH] Randomized order of {len(remaining)} parameter combinations")
+
     def callback(result):
         params, accuracy, duration = result
         store_result(params, accuracy, duration)
-        save_checkpoint()
         idx = remaining.index(params)
         status[idx] = "done"
         print_progress(status, remaining)

@@ -4,6 +4,7 @@ import random
 from PIL import Image
 import numpy as np
 from torchvision import transforms
+from sklearn.model_selection import train_test_split
 
 # Reuse the same character set mapping as original script
 import string
@@ -61,16 +62,14 @@ class PNGDataset:
         self.test_dir = test_dir
         self.test_fraction = test_fraction
 
-        parent = os.path.abspath(os.path.join(train_dir, ".."))
-        _save_file_dir = os.path.join(parent, "images_numpy_dataset.npz")
-        self.save_file_dir = _save_file_dir
+        # No on-disk cache: always build dataset from image folders
 
-    def save_numpy_dataset(self):
-        #
-        # Create the saved dataset
-        print("Creating .npz save file...")
+    def load(self):
+        """
+        Build dataset arrays from PNG folders and return X_train, y_train, X_test, y_test.
+        """
         all_images = []
-        #
+
         # Load training folder
         if os.path.isdir(self.train_dir):
             for filename in os.listdir(self.train_dir):
@@ -79,8 +78,8 @@ class PNGDataset:
                 img_data = load_image(os.path.join(self.train_dir, filename), True)
                 if img_data:
                     all_images.append(img_data)
-        #
-        # Load test folder
+
+        # Load test folder (optional)
         if os.path.isdir(self.test_dir):
             for filename in os.listdir(self.test_dir):
                 if not filename.lower().endswith(".png"):
@@ -89,36 +88,25 @@ class PNGDataset:
                 if img_data:
                     all_images.append(img_data)
 
-        random.shuffle(all_images)
-        n_test = max(1, int(len(all_images) * self.test_fraction))
-        test_data = all_images[:n_test]
-        train_data = all_images[n_test:]
+        if len(all_images) == 0:
+            raise RuntimeError("No images found. Check train_dir/test_dir paths and contents.")
 
-        if len(train_data) == 0:
-            raise RuntimeError("No training images found. Check train_dir path and contents.")
-        #
-        # Stack the numpy arrays so they can be saved in blocks
-        X_train = np.stack([t for t, _ in train_data]).astype("float32")
-        y_train = np.array([t for _, t in train_data], dtype=int)
-        X_test = np.stack([t for t, _ in test_data]).astype("float32")
-        y_test = np.array([t for _, t in test_data], dtype=int)
-        #
-        # Save the numpy-ized data
-        np.savez_compressed(
-            self.save_file_dir,
-            X_train=X_train,
-            y_train=y_train,
-            X_test=X_test,
-            y_test=y_test
-        )
+        # Separate images and labels into X and y
+        X = np.stack([img for img, _ in all_images]).astype("float32")
+        y = np.array([lbl for _, lbl in all_images], dtype=np.int64)
 
-    def load(self):
-        if not os.path.exists(self.save_file_dir):
-            self.save_numpy_dataset()
+        # Split into train/test using configured fraction. Prefer stratified split but
+        # fall back to a non-stratified split if stratification isn't possible.
+        try:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=self.test_fraction, stratify=y, random_state=42
+            )
+        except ValueError:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=self.test_fraction, random_state=42
+            )
 
-        print(f"Loading saved dataset: data/images_numpy_dataset.npz")
-        data = np.load(self.save_file_dir)
-        return data["X_train"], data["y_train"], data["X_test"], data["y_test"]
+        return X_train, y_train, X_test, y_test
 
 
 

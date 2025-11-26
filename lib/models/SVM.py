@@ -1,6 +1,6 @@
 import numpy as np
 import joblib
-from sklearn.svm import SVC
+from thundersvm import SVC
 from sklearn.preprocessing import StandardScaler
 from typing import Sequence, Optional, Dict
 
@@ -11,15 +11,14 @@ from .base import Classifier
 class SVMClassifier(Classifier):
     def __init__(
         self,
-        kernel: str = "rbf",
-        C: float = 1.0,
-        gamma: float = "scale",
-        coef0: float = 0.0,
-        degree: int = 3,
-        shrinking: bool = True,
-        tol: float = 1e-3,
-        cache_size: float = 200.0,
-        probability: bool = True
+        kernel='rbf',
+        degree=3,
+        gamma='auto',
+        coef0=0.0, C=1.0,
+        tol=0.001,
+        probability=False,
+        shrinking=False,
+        cache_size=None, 
     ):
         self.kernel = kernel
         self.C = C
