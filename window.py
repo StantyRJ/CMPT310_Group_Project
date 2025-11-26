@@ -328,8 +328,8 @@ if __name__ == "__main__":
         #else:
         #    X_train_flat = X_train_flat * 2.0 - 1.0   # scale 0..1 -> -1..1
 
-        # K=6 is the most accurate K
-        knn = KNNClassifier(6)
+        # K=1 is the most accurate K
+        knn = KNNClassifier(1)
         knn.fit(X_train_flat, y_train)
         print(f"KNN trained on {len(X_train)} samples")
     except Exception as e:
