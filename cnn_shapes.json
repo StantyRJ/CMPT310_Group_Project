@@ -35,24 +35,6 @@
         ]
     },
     {
-        "name": "narrow_deep",
-        "input_shape": [
-            1,
-            64,
-            64
-        ],
-        "conv_channels": [
-            32,
-            64,
-            128,
-            128
-        ],
-        "fc_units": [
-            256,
-            128
-        ]
-    },
-    {
         "name": "wide_deep",
         "input_shape": [
             1,

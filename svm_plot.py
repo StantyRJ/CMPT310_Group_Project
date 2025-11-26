@@ -82,7 +82,7 @@ zs[:, 0] = ys_jittered[:, 0]
 zs[:, 1:] = (ys_jittered[:, 1:] - ymins[1:]) / dys[1:] * dys[0] + ymins[0]
 
 # --- Setup axes ---
-fig, host = plt.subplots(figsize=(14, 6))
+fig, host = plt.subplots(figsize=(12, 6))
 axes = [host] + [host.twinx() for i in range(D - 1)]
 for i, ax in enumerate(axes):
     ax.set_ylim(ymins[i], ymaxs[i])
@@ -108,7 +108,7 @@ host.set_xticklabels(xticklabels, fontsize=12)
 host.tick_params(axis='x', which='major', pad=7)
 host.spines['right'].set_visible(False)
 host.xaxis.tick_top()
-host.set_title('SVM Hyperparameter Parallel Coordinates', fontsize=16)
+host.set_title('SVM Hyperparameters', fontsize=16)
 
 # --- Plot lines colored by accuracy (colormap) ---
 accs = np.array([d["accuracy"]["accuracy"] for d in data], dtype=float)
@@ -136,7 +136,7 @@ for j in range(N):
 sm = plt.cm.ScalarMappable(cmap=cmap)
 sm.set_array(accs)
 cbar = fig.colorbar(sm, ax=host, fraction=0.046, pad=0.04)
-cbar.set_label('Accuracy', fontsize=12)
+cbar.set_ticks([])
 
 # --- Kernel labels on kernel axis ---
 kernel_idx = features.index('kernel')
@@ -147,5 +147,6 @@ axis_for_kernel.set_yticklabels(kernels, fontsize=10)
 axis_for_kernel.set_ylabel('parameter')
 
 plt.tight_layout()
+plt.subplots_adjust(right=0.95)
 plt.savefig("svm_parallel_coordinates.png", dpi=300)
 plt.show()
